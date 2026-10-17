@@ -40,15 +40,27 @@ class _LoginViewState extends State<LoginView> {
   }
 
   Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your email and password.'),
+          backgroundColor: AppColors.accentRose,
+        ),
+      );
+      return;
+    }
+
     final auth = context.read<AuthProvider>();
+    final navigator = Navigator.of(context);
     await auth.login(
-      email: _emailController.text,
-      password: _passwordController.text,
+      email: email,
+      password: password,
       role: _selectedRole,
     );
-    if (mounted) {
-      Navigator.popUntil(context, (route) => route.isFirst);
-    }
+    navigator.popUntil((route) => route.isFirst);
   }
 
   @override

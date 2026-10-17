@@ -51,6 +51,7 @@ class _RegisterViewState extends State<RegisterView> {
     }
 
     final auth = context.read<AuthProvider>();
+    final navigator = Navigator.of(context);
     await auth.register(
       name: name,
       email: email,
@@ -58,9 +59,7 @@ class _RegisterViewState extends State<RegisterView> {
       role: _selectedRole,
     );
 
-    if (mounted) {
-      Navigator.popUntil(context, (route) => route.isFirst);
-    }
+    navigator.popUntil((route) => route.isFirst);
   }
 
   @override
