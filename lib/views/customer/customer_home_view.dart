@@ -242,6 +242,7 @@ class _CustomerHomeViewState extends State<CustomerHomeView> {
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
+                          minimumSize: const Size(0, 36),
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),

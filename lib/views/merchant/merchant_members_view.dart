@@ -101,6 +101,7 @@ class _MerchantMembersViewState extends State<MerchantMembersView> {
                     label: Text(_isAiScanning ? 'Scanning...' : 'AI Scan', style: const TextStyle(fontSize: 12)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.accentPurple,
+                      minimumSize: const Size(0, 38),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
