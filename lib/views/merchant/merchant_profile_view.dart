@@ -206,42 +206,73 @@ class _MerchantProfileViewState extends State<MerchantProfileView> {
 
               const SizedBox(height: 28),
 
-              // "How to Use Serbuin" Interactive Guide
-              const Text(
-                'How to Use Serbuin Merchant',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white),
-              ),
-              const SizedBox(height: 12),
-              _GuideStepCard(
-                stepNumber: '1',
-                title: 'Create AI Loyalty Cards',
-                description: 'Tap "Create" on Home. Use Gemini AI to auto-generate reward rules, stamps, and gradients. Max 3 active cards.',
-                icon: Icons.auto_awesome_rounded,
-                accentColor: AppColors.primaryLight,
-              ),
-              const SizedBox(height: 10),
-              _GuideStepCard(
-                stepNumber: '2',
-                title: 'Scan Customer QR for Stamps',
-                description: 'When a customer orders, tap the center round Scan button in the bottom navigation to scan their Profile QR and award stamps.',
-                icon: Icons.qr_code_scanner_rounded,
-                accentColor: AppColors.accentCyan,
-              ),
-              const SizedBox(height: 10),
-              _GuideStepCard(
-                stepNumber: '3',
-                title: 'Redeem Customer Vouchers',
-                description: 'Customers show dynamic 2-minute expiring QR vouchers. Point your scanner at the voucher QR to redeem instantly.',
-                icon: Icons.confirmation_num_rounded,
-                accentColor: AppColors.accentEmerald,
-              ),
-              const SizedBox(height: 10),
-              _GuideStepCard(
-                stepNumber: '4',
-                title: 'Re-engage At-Risk Members',
-                description: 'Open the Members tab. The AI Churn Scanner flags customers at risk of not returning and recommends 1-click win-back vouchers.',
-                icon: Icons.insights_rounded,
-                accentColor: AppColors.accentAmber,
+              // "How to Use Serbuin" Expandable Guide (Default: Collapsed)
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceCard,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Theme(
+                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    initiallyExpanded: false,
+                    tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    childrenPadding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.help_outline_rounded, color: AppColors.primaryLight, size: 20),
+                    ),
+                    title: const Text(
+                      'How to Use Serbuin App',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white),
+                    ),
+                    subtitle: const Text(
+                      'Tap to view step-by-step cashier & loyalty guide',
+                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                    iconColor: AppColors.primaryLight,
+                    collapsedIconColor: AppColors.textMuted,
+                    children: const [
+                      SizedBox(height: 8),
+                      _GuideStepCard(
+                        stepNumber: '1',
+                        title: 'Create AI Loyalty Cards',
+                        description: 'Tap "Create" on Home. Use Gemini AI to auto-generate reward rules, stamps, and gradients. Max 3 active cards.',
+                        icon: Icons.auto_awesome_rounded,
+                        accentColor: AppColors.primaryLight,
+                      ),
+                      SizedBox(height: 10),
+                      _GuideStepCard(
+                        stepNumber: '2',
+                        title: 'Scan Customer QR for Stamps',
+                        description: 'When a customer orders, tap the center round Scan button in the bottom navigation to scan their Profile QR and award stamps.',
+                        icon: Icons.qr_code_scanner_rounded,
+                        accentColor: AppColors.accentCyan,
+                      ),
+                      SizedBox(height: 10),
+                      _GuideStepCard(
+                        stepNumber: '3',
+                        title: 'Redeem Customer Vouchers',
+                        description: 'Customers show dynamic 2-minute expiring QR vouchers. Point your scanner at the voucher QR to redeem instantly.',
+                        icon: Icons.confirmation_num_rounded,
+                        accentColor: AppColors.accentEmerald,
+                      ),
+                      SizedBox(height: 10),
+                      _GuideStepCard(
+                        stepNumber: '4',
+                        title: 'Re-engage At-Risk Members',
+                        description: 'Open the Members tab. The AI Churn Scanner flags customers at risk of not returning and recommends 1-click win-back vouchers.',
+                        icon: Icons.insights_rounded,
+                        accentColor: AppColors.accentAmber,
+                      ),
+                    ],
+                  ),
+                ),
               ),
 
               const SizedBox(height: 28),
@@ -289,12 +320,38 @@ class _MerchantProfileViewState extends State<MerchantProfileView> {
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: () async {
-                    final navigator = Navigator.of(context);
-                    await auth.logout();
-                    navigator.pushAndRemoveUntil(
-                      MaterialPageRoute(builder: (_) => const RoleSelectionView()),
-                      (route) => false,
+                    final shouldLogout = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        backgroundColor: AppColors.surfaceCard,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          side: const BorderSide(color: AppColors.border),
+                        ),
+                        title: const Text('Confirm Logout', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                        content: const Text('Are you sure you want to log out of your merchant account? Local session will be cleaned.', style: TextStyle(color: AppColors.textSecondary)),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.accentRose),
+                            child: const Text('Log Out'),
+                          ),
+                        ],
+                      ),
                     );
+
+                    if (shouldLogout == true && context.mounted) {
+                      final navigator = Navigator.of(context);
+                      await auth.logout();
+                      navigator.pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const RoleSelectionView()),
+                        (route) => false,
+                      );
+                    }
                   },
                   icon: const Icon(Icons.logout_rounded, color: AppColors.accentRose, size: 18),
                   label: const Text('Log Out (Switch Role)', style: TextStyle(color: AppColors.accentRose, fontWeight: FontWeight.w700)),

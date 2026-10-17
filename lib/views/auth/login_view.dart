@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
+import '../customer/customer_main_view.dart';
+import '../merchant/merchant_main_view.dart';
 import 'register_view.dart';
 
 class LoginView extends StatefulWidget {
@@ -53,14 +55,43 @@ class _LoginViewState extends State<LoginView> {
       return;
     }
 
-    final auth = context.read<AuthProvider>();
-    final navigator = Navigator.of(context);
-    await auth.login(
-      email: email,
-      password: password,
-      role: _selectedRole,
-    );
-    navigator.popUntil((route) => route.isFirst);
+    try {
+      final auth = context.read<AuthProvider>();
+      final success = await auth.login(
+        email: email,
+        password: password,
+        role: _selectedRole,
+      );
+
+      if (!mounted) return;
+
+      final user = auth.currentUser;
+      if (success && user != null) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => user.role == UserRole.merchant
+                ? MerchantMainView(user: user)
+                : CustomerMainView(user: user),
+          ),
+          (route) => false,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Login failed. Please check your credentials and try again.'),
+            backgroundColor: AppColors.accentRose,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Login error: $e'),
+          backgroundColor: AppColors.accentRose,
+        ),
+      );
+    }
   }
 
   @override

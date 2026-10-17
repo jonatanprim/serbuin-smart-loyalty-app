@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
+import '../customer/customer_main_view.dart';
+import '../merchant/merchant_main_view.dart';
 import 'login_view.dart';
 
 class RegisterView extends StatefulWidget {
@@ -50,16 +52,44 @@ class _RegisterViewState extends State<RegisterView> {
       return;
     }
 
-    final auth = context.read<AuthProvider>();
-    final navigator = Navigator.of(context);
-    await auth.register(
-      name: name,
-      email: email,
-      password: password,
-      role: _selectedRole,
-    );
+    try {
+      final auth = context.read<AuthProvider>();
+      final success = await auth.register(
+        name: name,
+        email: email,
+        password: password,
+        role: _selectedRole,
+      );
 
-    navigator.popUntil((route) => route.isFirst);
+      if (!mounted) return;
+
+      final user = auth.currentUser;
+      if (success && user != null) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => user.role == UserRole.merchant
+                ? MerchantMainView(user: user)
+                : CustomerMainView(user: user),
+          ),
+          (route) => false,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Registration failed. Please check details and try again.'),
+            backgroundColor: AppColors.accentRose,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Registration error: $e'),
+          backgroundColor: AppColors.accentRose,
+        ),
+      );
+    }
   }
 
   @override

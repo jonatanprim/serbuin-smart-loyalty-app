@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
@@ -21,6 +22,7 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
   bool _isProcessing = false;
   String? _selectedProgramId;
   bool _isTorchOn = false;
+  bool _isRequestingCamera = false;
 
   @override
   void initState() {
@@ -32,7 +34,7 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
 
     _scannerController = MobileScannerController(
       detectionSpeed: DetectionSpeed.normal,
-      facing: CameraFacing.back,
+      facing: kIsWeb ? CameraFacing.front : CameraFacing.back,
       torchEnabled: false,
     );
 
@@ -41,6 +43,13 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
     if (merchantProgs.isNotEmpty) {
       _selectedProgramId = merchantProgs.first.id;
     }
+
+    // Attempt camera start on mount
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _requestCameraPermission();
+      }
+    });
   }
 
   @override
@@ -52,20 +61,35 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
   }
 
   Future<void> _requestCameraPermission() async {
+    if (_isRequestingCamera) return;
+    setState(() => _isRequestingCamera = true);
+
     try {
-      await _scannerController.stop();
+      if (_scannerController.value.isRunning) {
+        await _scannerController.stop();
+      }
       await _scannerController.start();
-      if (mounted) setState(() {});
     } catch (e) {
-      debugPrint('Camera permission note: $e');
+      debugPrint('Primary camera start attempt: $e');
+      // If back camera is unavailable (e.g. desktop/laptop webcam), try front camera
+      try {
+        await _scannerController.switchCamera();
+        await _scannerController.start();
+      } catch (e2) {
+        debugPrint('Fallback camera start attempt: $e2');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Camera access: Tap the camera/lock icon in your browser address bar to allow camera permission ($e2)'),
+              backgroundColor: AppColors.accentRose,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } finally {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Camera request: Please check browser permission icon near URL bar ($e)'),
-            backgroundColor: AppColors.accentRose,
-            duration: const Duration(seconds: 4),
-          ),
-        );
+        setState(() => _isRequestingCamera = false);
       }
     }
   }
@@ -697,6 +721,63 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
                               }
                             }
                           },
+                          placeholderBuilder: (context) {
+                            return Center(
+                              child: SingleChildScrollView(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(14),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary.withValues(alpha: 0.15),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.camera_alt_rounded, color: AppColors.primaryLight, size: 36),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      _isRequestingCamera ? 'Requesting Camera...' : 'Camera Scanner',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _isRequestingCamera
+                                          ? 'Please click "Allow" on the browser prompt'
+                                          : 'Tap below to activate camera & allow permission',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    SizedBox(
+                                      height: 38,
+                                      child: ElevatedButton.icon(
+                                        onPressed: _isRequestingCamera ? null : _requestCameraPermission,
+                                        icon: _isRequestingCamera
+                                            ? const SizedBox(
+                                                width: 14,
+                                                height: 14,
+                                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                              )
+                                            : const Icon(Icons.videocam_rounded, size: 16),
+                                        label: Text(
+                                          _isRequestingCamera ? 'Requesting...' : 'Activate Camera',
+                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.primary,
+                                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                           errorBuilder: (context, error) {
                             return Center(
                               child: SingleChildScrollView(
@@ -714,13 +795,13 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
                                     ),
                                     const SizedBox(height: 10),
                                     const Text(
-                                      'Camera Access Disabled',
+                                      'Camera Access Needed',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
                                     ),
                                     const SizedBox(height: 4),
                                     const Text(
-                                      'Click below to request camera permission:',
+                                      'Click below to grant camera permission:',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
                                     ),
@@ -728,7 +809,7 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
                                     SizedBox(
                                       height: 38,
                                       child: ElevatedButton.icon(
-                                        onPressed: _requestCameraPermission,
+                                        onPressed: _isRequestingCamera ? null : _requestCameraPermission,
                                         icon: const Icon(Icons.camera_alt_rounded, size: 14),
                                         label: const Text('Request Permission', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
                                         style: ElevatedButton.styleFrom(
@@ -754,34 +835,40 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
                         // Corner targeting markers
                         ..._buildCornerMarkers(),
 
-                        // Animated scanning laser
-                        AnimatedBuilder(
-                          animation: _laserController,
-                          builder: (context, child) {
-                            return Positioned(
-                              top: 20 + (_laserController.value * 230),
-                              left: 15,
-                              right: 15,
-                              child: Container(
-                                height: 3,
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      Colors.transparent,
-                                      AppColors.accentCyan,
-                                      AppColors.primaryLight,
-                                      Colors.transparent,
-                                    ],
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.accentCyan.withValues(alpha: 0.8),
-                                      blurRadius: 10,
-                                      spreadRadius: 2,
+                        // Animated scanning laser (only while running)
+                        ValueListenableBuilder<MobileScannerState>(
+                          valueListenable: _scannerController,
+                          builder: (context, state, _) {
+                            if (!state.isRunning) return const SizedBox.shrink();
+                            return AnimatedBuilder(
+                              animation: _laserController,
+                              builder: (context, child) {
+                                return Positioned(
+                                  top: 20 + (_laserController.value * 230),
+                                  left: 15,
+                                  right: 15,
+                                  child: Container(
+                                    height: 3,
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [
+                                          Colors.transparent,
+                                          AppColors.accentCyan,
+                                          AppColors.primaryLight,
+                                          Colors.transparent,
+                                        ],
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppColors.accentCyan.withValues(alpha: 0.8),
+                                          blurRadius: 10,
+                                          spreadRadius: 2,
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                              ),
+                                  ),
+                                );
+                              },
                             );
                           },
                         ),
