@@ -551,6 +551,63 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                 }
               }
             },
+            placeholderBuilder: (context) => const ColoredBox(
+              color: Colors.black,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(color: AppColors.primaryLight),
+                    SizedBox(height: 14),
+                    Text(
+                      'Starting camera...\nAllow camera access if your browser asks.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            errorBuilder: (context, error) {
+              final isDenied = error.errorCode == MobileScannerErrorCode.permissionDenied;
+              return ColoredBox(
+                color: Colors.black,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.videocam_off_rounded, color: AppColors.accentRose, size: 44),
+                        const SizedBox(height: 12),
+                        Text(
+                          isDenied ? 'Camera permission denied' : 'Camera unavailable',
+                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          isDenied
+                              ? 'Enable camera access for this site (lock icon in the address bar), then tap Retry.'
+                              : (error.errorDetails?.message ?? error.errorCode.name),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white60, fontSize: 12),
+                        ),
+                        const SizedBox(height: 14),
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            await _scannerController.stop();
+                            await _scannerController.start();
+                          },
+                          icon: const Icon(Icons.refresh_rounded, size: 18),
+                          label: const Text('Retry'),
+                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
 
           // 2. Translucent Vignette Mask & Scanning Frame Overlay
