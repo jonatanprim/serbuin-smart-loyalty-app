@@ -21,6 +21,8 @@ class CustomerHomeView extends StatefulWidget {
 class _CustomerHomeViewState extends State<CustomerHomeView> {
   final _searchController = TextEditingController();
   String _selectedStatus = 'All';
+  final Map<String, int> _previousCardStamps = {};
+  String? _lastStampedCardId;
 
   @override
   void dispose() {
@@ -82,8 +84,98 @@ class _CustomerHomeViewState extends State<CustomerHomeView> {
       return false;
     }).toList();
 
-    // Sort stacked cards: MOST RECENT lastStampDate placed in front (index 0)
-    memberRecords.sort((a, b) => b.lastStampDate.compareTo(a.lastStampDate));
+    // Detect any new stamps and record the stamped card
+    for (final card in memberRecords) {
+      final prev = _previousCardStamps[card.id];
+      if (prev != null && card.stampsCollected > prev) {
+        final diff = card.stampsCollected - prev;
+        _lastStampedCardId = card.id;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.stars_rounded, color: AppColors.accentAmber, size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '+$diff Stamp${diff > 1 ? 's' : ''} Received!',
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.white),
+                        ),
+                        Text(
+                          '${card.stampsCollected}/${card.totalStampsRequired} stamps on ${card.programTitle}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: const Color(0xFF1E293B),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppColors.primary, width: 1.5),
+              ),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        });
+      } else if (prev == null && _previousCardStamps.isNotEmpty) {
+        _lastStampedCardId = card.id;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.card_membership_rounded, color: AppColors.accentEmerald, size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'New Loyalty Card Added!',
+                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.white),
+                        ),
+                        Text(
+                          '${card.programTitle} • ${card.stampsCollected}/${card.totalStampsRequired} stamps',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: const Color(0xFF1E293B),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppColors.accentEmerald, width: 1.5),
+              ),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        });
+      }
+      _previousCardStamps[card.id] = card.stampsCollected;
+    }
+
+    // Sort cards so the card that last received a stamp is always on top (index 0)
+    memberRecords.sort((a, b) {
+      if (a.id == _lastStampedCardId) return -1;
+      if (b.id == _lastStampedCardId) return 1;
+      return b.lastStampDate.compareTo(a.lastStampDate);
+    });
 
     // Search filter
     final query = _searchController.text.trim().toLowerCase();

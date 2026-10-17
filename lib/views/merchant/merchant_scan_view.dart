@@ -243,7 +243,7 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                                     const Icon(Icons.phone_rounded, size: 12, color: AppColors.textMuted),
                                     const SizedBox(width: 4),
                                     Text(
-                                      customerPhone.isNotEmpty ? customerPhone : '+62 812-3456-7890',
+                                      customerPhone.isNotEmpty ? customerPhone : 'ID: ',
                                       style: const TextStyle(
                                         color: AppColors.textSecondary,
                                         fontSize: 12,
