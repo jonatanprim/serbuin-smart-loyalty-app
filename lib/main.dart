@@ -1,4 +1,13 @@
+// ignore: depend_on_referenced_packages
+import 'package:cloud_firestore_platform_interface/cloud_firestore_platform_interface.dart';
+// ignore: depend_on_referenced_packages
+import 'package:cloud_firestore_web/cloud_firestore_web.dart';
 import 'package:firebase_core/firebase_core.dart';
+// ignore: depend_on_referenced_packages
+import 'package:firebase_core_platform_interface/firebase_core_platform_interface.dart';
+// ignore: depend_on_referenced_packages
+import 'package:firebase_core_web/firebase_core_web.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'firebase_options.dart';
@@ -14,6 +23,11 @@ import 'widgets/responsive_mobile_wrapper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (kIsWeb) {
+    FirebasePlatform.instance = FirebaseCoreWeb();
+    FirebaseFirestorePlatform.instance = FirebaseFirestoreWeb();
+  }
 
   // Initialize Firebase & Cloud Firestore in dual-mode (cloud + local fallback)
   try {
