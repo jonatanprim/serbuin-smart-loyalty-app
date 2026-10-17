@@ -24,6 +24,7 @@ class _MerchantScanViewState extends State<MerchantScanView> {
   @override
   void initState() {
     super.initState();
+    MobileScannerPlatform.instance.setBarcodeLibraryScriptUrl('zxing.min.js');
     _scannerController = MobileScannerController();
 
     final db = context.read<MockDatabaseService>();
@@ -551,20 +552,35 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                 }
               }
             },
-            placeholderBuilder: (context) => const ColoredBox(
+            placeholderBuilder: (context) => ColoredBox(
               color: Colors.black,
               child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(color: AppColors.primaryLight),
-                    SizedBox(height: 14),
-                    Text(
-                      'Starting camera...\nAllow camera access if your browser asks.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
-                  ],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(color: AppColors.primaryLight),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Starting camera...\nAllow camera access if your browser asks.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                      ),
+                      const SizedBox(height: 20),
+                      OutlinedButton.icon(
+                        onPressed: _showInputManualSheet,
+                        icon: const Icon(Icons.dialpad_rounded, size: 18),
+                        label: const Text('Input Phone Number Manually'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -592,15 +608,30 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                           textAlign: TextAlign.center,
                           style: const TextStyle(color: Colors.white60, fontSize: 12),
                         ),
-                        const SizedBox(height: 14),
-                        ElevatedButton.icon(
-                          onPressed: () async {
-                            await _scannerController.stop();
-                            await _scannerController.start();
-                          },
-                          icon: const Icon(Icons.refresh_rounded, size: 18),
-                          label: const Text('Retry'),
-                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                await _scannerController.stop();
+                                await _scannerController.start();
+                              },
+                              icon: const Icon(Icons.refresh_rounded, size: 18),
+                              label: const Text('Retry'),
+                              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                            ),
+                            const SizedBox(width: 12),
+                            OutlinedButton.icon(
+                              onPressed: _showInputManualSheet,
+                              icon: const Icon(Icons.dialpad_rounded, size: 18),
+                              label: const Text('Manual Input'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: const BorderSide(color: Colors.white38),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
