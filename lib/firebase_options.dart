@@ -6,7 +6,7 @@ class DefaultFirebaseOptions {
   static const String projectId = 'serbuin-smart-loyalty-app';
   static const String messagingSenderId = '398979153007';
   static const String authDomain = 'serbuin-smart-loyalty-app.firebaseapp.com';
-  static const String storageBucket = 'serbuin-smart-loyalty-app.appspot.com';
+  static const String storageBucket = 'serbuin-smart-loyalty-app.firebasestorage.app';
 
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
@@ -23,8 +23,8 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSy_SerbuinSmartLoyaltyApiKeyWebDefault',
-    appId: '1:398979153007:web:8c57173b98c52089eb001a',
+    apiKey: 'AIzaSyAYBkgg2pFsD1ip3u6mUnBinL-XJWL6sG4',
+    appId: '1:398979153007:web:297bf9fa1c205589bda19a',
     messagingSenderId: messagingSenderId,
     projectId: projectId,
     authDomain: authDomain,
@@ -32,8 +32,8 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSy_SerbuinSmartLoyaltyApiKeyAndroidDefault',
-    appId: '1:398979153007:android:5fa7216c88e91823ab002b',
+    apiKey: 'AIzaSyAYBkgg2pFsD1ip3u6mUnBinL-XJWL6sG4',
+    appId: '1:398979153007:android:638e6499da073588bda19a',
     messagingSenderId: messagingSenderId,
     projectId: projectId,
     storageBucket: storageBucket,
