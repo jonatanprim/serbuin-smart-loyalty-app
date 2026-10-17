@@ -25,6 +25,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (kIsWeb) {
+    FirebaseCoreWeb.registerService('firestore');
     FirebasePlatform.instance = FirebaseCoreWeb();
     FirebaseFirestorePlatform.instance = FirebaseFirestoreWeb();
   }
