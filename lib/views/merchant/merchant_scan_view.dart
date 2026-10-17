@@ -34,6 +34,7 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
     )..repeat(reverse: true);
 
     _scannerController = MobileScannerController(
+      autoStart: false,
       detectionSpeed: DetectionSpeed.normal,
       facing: kIsWeb ? CameraFacing.front : CameraFacing.back,
       torchEnabled: false,
@@ -45,7 +46,7 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
       _selectedProgramId = merchantProgs.first.id;
     }
 
-    // Attempt camera start on mount
+    // Attempt camera start after widget is fully mounted in tree
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _requestCameraPermission();
@@ -66,39 +67,50 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
     setState(() => _isRequestingCamera = true);
 
     try {
-      // Explicitly request camera permission using permission_handler
-      final status = await Permission.camera.request();
-      if (status.isPermanentlyDenied && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Camera permission permanently denied. Tap Settings to enable it.'),
-            action: SnackBarAction(
-              label: 'Settings',
-              textColor: Colors.white,
-              onPressed: () => openAppSettings(),
+      // 1. Explicitly request camera permission using permission_handler on mobile platforms
+      if (!kIsWeb) {
+        final status = await Permission.camera.request();
+        if (status.isPermanentlyDenied && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Camera permission permanently denied. Tap Settings to enable it.'),
+              action: SnackBarAction(
+                label: 'Settings',
+                textColor: Colors.white,
+                onPressed: () => openAppSettings(),
+              ),
+              backgroundColor: AppColors.accentRose,
+              duration: const Duration(seconds: 6),
             ),
-            backgroundColor: AppColors.accentRose,
-            duration: const Duration(seconds: 6),
-          ),
-        );
+          );
+          return;
+        }
       }
 
+      if (!mounted) return;
+
+      // 2. Stop if already running to prevent double-start collisions
       if (_scannerController.value.isRunning) {
         await _scannerController.stop();
       }
-      await _scannerController.start();
+
+      // 3. Call start() with facing parameter directly
+      await _scannerController.start(
+        cameraDirection: kIsWeb ? CameraFacing.front : CameraFacing.back,
+      );
     } catch (e) {
       debugPrint('Primary camera start attempt: $e');
-      // If back camera is unavailable (e.g. desktop/laptop webcam), try front camera
+      // If primary camera fails (e.g. desktop webcam without environment lens), fallback directly to front camera
       try {
-        await _scannerController.switchCamera();
-        await _scannerController.start();
+        if (!_scannerController.value.isRunning) {
+          await _scannerController.start(cameraDirection: CameraFacing.front);
+        }
       } catch (e2) {
         debugPrint('Fallback camera start attempt: $e2');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Camera access: Tap the camera/lock icon in your browser address bar to allow camera permission ($e2)'),
+              content: Text('Camera: Tap the lock icon in your browser address bar to allow camera access ($e2)'),
               backgroundColor: AppColors.accentRose,
               duration: const Duration(seconds: 5),
             ),
@@ -651,13 +663,23 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
               color: _isTorchOn ? AppColors.accentAmber : Colors.white70,
             ),
             onPressed: () {
-              setState(() => _isTorchOn = !_isTorchOn);
-              _scannerController.toggleTorch();
+              if (_scannerController.value.isInitialized && _scannerController.value.isRunning) {
+                setState(() => _isTorchOn = !_isTorchOn);
+                _scannerController.toggleTorch();
+              } else {
+                _requestCameraPermission();
+              }
             },
           ),
           IconButton(
             icon: const Icon(Icons.cameraswitch_rounded, color: Colors.white70),
-            onPressed: () => _scannerController.switchCamera(),
+            onPressed: () {
+              if (_scannerController.value.isInitialized && _scannerController.value.isRunning) {
+                _scannerController.switchCamera();
+              } else {
+                _requestCameraPermission();
+              }
+            },
           ),
         ],
       ),
