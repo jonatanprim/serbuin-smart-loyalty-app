@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/models.dart';
+import 'cloud_run_service.dart';
 
 class MockDatabaseService extends ChangeNotifier {
   static final MockDatabaseService _instance = MockDatabaseService._internal();
@@ -440,6 +441,13 @@ class MockDatabaseService extends ChangeNotifier {
     await _saveToStorage();
     notifyListeners();
 
+    // Trigger Cloud Run FCM push notification
+    CloudRunService().sendFcmNotification(
+      customerId: customerId,
+      title: member.stampsCollected >= program.totalStamps ? '🎉 Reward Unlocked!' : '☕ +$count Stamp Earned!',
+      body: '${member.stampsCollected}/${program.totalStamps} stamps collected on ${program.title}',
+    );
+
     return {
       'success': true,
       'member': member,
@@ -546,6 +554,13 @@ class MockDatabaseService extends ChangeNotifier {
 
     await _saveToStorage();
     notifyListeners();
+
+    // Trigger Cloud Run FCM push notification to customer
+    CloudRunService().sendFcmNotification(
+      customerId: member.customerId,
+      title: '🎁 Exclusive Retention Perk!',
+      body: '$title has been sent to your wallet by Kopi Kenangan Artisan.',
+    );
   }
 
   // --- Customer Methods ---

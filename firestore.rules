@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection (merchants and customers)
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+    
+    // Loyalty Programs (max 3 per merchant)
+    match /programs/{programId} {
+      allow read, write: if true;
+    }
+    
+    // Member records (stamps, risk level, recommendations)
+    match /members/{memberId} {
+      allow read, write: if true;
+    }
+    
+    // Reward vouchers (dynamic QR validation, countdown expiry)
+    match /vouchers/{voucherId} {
+      allow read, write: if true;
+    }
+    
+    // Activity logs
+    match /activities/{activityId} {
+      allow read, write: if true;
+    }
+  }
+}
