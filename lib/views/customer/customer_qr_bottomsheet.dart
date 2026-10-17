@@ -10,7 +10,7 @@ class CustomerQrBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final qrPayload = '${user.id}|${user.name}';
+    final qrPayload = '${user.id}|${user.name}|${user.phone ?? ''}';
 
     return SafeArea(
       top: false,

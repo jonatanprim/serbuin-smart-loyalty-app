@@ -63,8 +63,21 @@ class _CustomerHomeViewState extends State<CustomerHomeView> {
         .toList();
     final voucherCount = customerVouchers.length;
 
-    // Member records for this customer
-    var memberRecords = db.members.where((m) => m.customerId == widget.user.id).toList();
+    // Member records for this customer (matched by customerId, phone, or email)
+    final cleanUserPhone = widget.user.phone?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
+    final cleanUserEmail = widget.user.email.trim().toLowerCase();
+
+    var memberRecords = db.members.where((m) {
+      if (m.customerId == widget.user.id) return true;
+      if (cleanUserEmail.isNotEmpty && m.customerEmail.trim().toLowerCase() == cleanUserEmail) return true;
+      final cleanMemberPhone = m.customerPhone.replaceAll(RegExp(r'[^0-9]'), '');
+      if (cleanUserPhone.length >= 6 && cleanMemberPhone.isNotEmpty) {
+        if (cleanMemberPhone.endsWith(cleanUserPhone) || cleanUserPhone.endsWith(cleanMemberPhone)) {
+          return true;
+        }
+      }
+      return false;
+    }).toList();
 
     // Sort stacked cards: MOST RECENT lastStampDate placed in front (index 0)
     memberRecords.sort((a, b) => b.lastStampDate.compareTo(a.lastStampDate));
@@ -84,13 +97,21 @@ class _CustomerHomeViewState extends State<CustomerHomeView> {
       }).toList();
     }
 
-    // Customer activities
-    final customerActivities = db.activities.where((a) => a.userId == widget.user.id).toList();
+    // Customer activities (matched by userId or matched program activities)
+    final customerActivities = db.activities.where((a) {
+      return a.userId == widget.user.id || (a.type == 'stamp_earned' && a.subtitle.isNotEmpty);
+    }).toList();
 
     return Scaffold(
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: () async {
+            await db.init();
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -394,7 +415,8 @@ class _CustomerHomeViewState extends State<CustomerHomeView> {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }
 

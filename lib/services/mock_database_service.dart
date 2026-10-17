@@ -464,6 +464,33 @@ class MockDatabaseService extends ChangeNotifier {
     return null;
   }
 
+  /// Look up registered customer user account by phone number in shared registry
+  Future<Map<String, String>?> findRegisteredCustomerByPhone(String phone) async {
+    final cleanDigits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (cleanDigits.length < 6) return null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final registryJson = prefs.getString('serbuin_registered_users');
+      if (registryJson != null) {
+        final List list = jsonDecode(registryJson);
+        for (final item in list) {
+          final p = (item['phone'] ?? '').toString().replaceAll(RegExp(r'[^0-9]'), '');
+          if (p.isNotEmpty && (p.endsWith(cleanDigits) || cleanDigits.endsWith(p))) {
+            return {
+              'id': item['id']?.toString() ?? '',
+              'name': item['name']?.toString() ?? '',
+              'phone': item['phone']?.toString() ?? phone,
+              'email': item['email']?.toString() ?? '',
+            };
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Registry customer lookup error: $e');
+    }
+    return null;
+  }
+
   /// Award stamp to a member by scanning QR or entering phone
   Future<Map<String, dynamic>> awardStampToCustomer({
     required String merchantId,

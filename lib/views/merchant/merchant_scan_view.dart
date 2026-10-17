@@ -41,19 +41,19 @@ class _MerchantScanViewState extends State<MerchantScanView> {
   }
 
   void _showInputManualSheet() async {
-    final phone = await showModalBottomSheet<String>(
+    final result = await showModalBottomSheet<Map<String, String>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => const _InputManualBottomSheet(),
     );
 
-    if (phone != null && phone.isNotEmpty) {
-      _handleCustomerLookup(phone);
+    if (result != null && result['phone'] != null && result['phone']!.isNotEmpty) {
+      _handleCustomerLookup(result['phone']!, providedName: result['name']);
     }
   }
 
-  void _handleCustomerLookup(String query) {
+  void _handleCustomerLookup(String query, {String? providedName}) async {
     if (_isProcessing) return;
     setState(() => _isProcessing = true);
 
@@ -79,17 +79,17 @@ class _MerchantScanViewState extends State<MerchantScanView> {
 
     // Parse potential QR payload: "cust-alex|Alex Morgan|phone" or "cust-alex" or phone
     String customerId = query;
-    String customerName = 'Alex Morgan';
+    String customerName = 'Loyalty Member';
     String customerPhone = query;
 
     if (query.contains('|')) {
       final parts = query.split('|');
       customerId = parts[0];
-      if (parts.length > 1) customerName = parts[1];
-      if (parts.length > 2) customerPhone = parts[2];
+      if (parts.length > 1 && parts[1].isNotEmpty) customerName = parts[1];
+      if (parts.length > 2 && parts[2].isNotEmpty) customerPhone = parts[2];
     }
 
-    // Try finding in database
+    // 1. Try finding in program members
     final existingMember = db.findMemberByPhoneOrIdentifier(
       query: customerId.isNotEmpty ? customerId : query,
       programId: programId,
@@ -102,22 +102,33 @@ class _MerchantScanViewState extends State<MerchantScanView> {
       customerPhone = existingMember.customerPhone;
       currentStamps = existingMember.stampsCollected;
     } else {
-      if (customerId.startsWith('cust-')) {
-        customerName = customerId.replaceAll('cust-', '').toUpperCase();
+      // 2. Try looking up in registered user accounts
+      final regUser = await db.findRegisteredCustomerByPhone(customerPhone.isNotEmpty ? customerPhone : query);
+      if (regUser != null) {
+        customerId = regUser['id']!;
+        customerName = regUser['name']!;
+        customerPhone = regUser['phone']!;
+      } else if (providedName != null && providedName.trim().isNotEmpty) {
+        customerName = providedName.trim();
+      } else if (customerId.startsWith('cust-') && !customerId.contains(RegExp(r'^[0-9]+$'))) {
+        final cleanId = customerId.replaceAll('cust-', '');
+        customerName = cleanId.isNotEmpty ? cleanId[0].toUpperCase() + cleanId.substring(1) : 'Customer';
       } else {
-        customerName = 'Member ($customerPhone)';
+        customerName = 'Customer Member';
       }
     }
 
-    setState(() => _isProcessing = false);
+    if (mounted) {
+      setState(() => _isProcessing = false);
 
-    _showCustomerAwardBottomSheet(
-      customerId: customerId,
-      customerName: customerName,
-      customerPhone: customerPhone,
-      currentStamps: currentStamps,
-      targetProgram: targetProgram,
-    );
+      _showCustomerAwardBottomSheet(
+        customerId: customerId,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        currentStamps: currentStamps,
+        targetProgram: targetProgram,
+      );
+    }
   }
 
   void _showCustomerAwardBottomSheet({
@@ -779,17 +790,20 @@ class _InputManualBottomSheet extends StatefulWidget {
 
 class _InputManualBottomSheetState extends State<_InputManualBottomSheet> {
   final _phoneController = TextEditingController();
+  final _nameController = TextEditingController();
 
   @override
   void dispose() {
     _phoneController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
   void _submit() {
     final phone = _phoneController.text.trim();
+    final name = _nameController.text.trim();
     if (phone.isEmpty) return;
-    Navigator.of(context).pop(phone);
+    Navigator.of(context).pop({'phone': phone, 'name': name});
   }
 
   @override
@@ -846,6 +860,18 @@ class _InputManualBottomSheetState extends State<_InputManualBottomSheet> {
               labelText: 'Customer Phone Number',
               hintText: 'e.g. 081234567890 or +62812...',
               prefixIcon: Icon(Icons.phone_rounded, color: AppColors.primaryLight, size: 20),
+            ),
+            onSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _nameController,
+            keyboardType: TextInputType.name,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'Customer Name (Optional)',
+              hintText: 'e.g. Alex Morgan, Budi Santoso',
+              prefixIcon: Icon(Icons.person_outline_rounded, color: AppColors.primaryLight, size: 20),
             ),
             onSubmitted: (_) => _submit(),
           ),

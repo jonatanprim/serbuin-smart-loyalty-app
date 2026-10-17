@@ -330,6 +330,23 @@ class _MemberCard extends StatelessWidget {
       riskLabel = 'Medium Risk';
     }
 
+    // Ensure display name is customer username, never raw phone number
+    String displayName = member.customerName.trim();
+    if (displayName.isEmpty ||
+        displayName.startsWith('Member (+') ||
+        displayName.startsWith('Member (0') ||
+        displayName.startsWith('Member (')) {
+      if (member.customerEmail.isNotEmpty && !member.customerEmail.contains('@serbuin.com')) {
+        final prefix = member.customerEmail.split('@').first;
+        displayName = prefix.isNotEmpty ? prefix[0].toUpperCase() + prefix.substring(1) : 'Customer Member';
+      } else if (member.customerId.startsWith('cust-') && !member.customerId.contains(RegExp(r'^[0-9]+$'))) {
+        final cleanId = member.customerId.replaceAll('cust-', '');
+        displayName = cleanId.isNotEmpty ? cleanId[0].toUpperCase() + cleanId.substring(1) : 'Customer';
+      } else {
+        displayName = 'Loyalty Member';
+      }
+    }
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
@@ -351,7 +368,7 @@ class _MemberCard extends StatelessWidget {
                   radius: 20,
                   backgroundColor: AppColors.surfaceLight,
                   child: Text(
-                    member.customerName.isNotEmpty ? member.customerName[0].toUpperCase() : 'U',
+                    displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
                     style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primaryLight),
                   ),
                 ),
@@ -361,12 +378,14 @@ class _MemberCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        member.customerName,
+                        displayName,
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        member.programTitle,
+                        member.customerPhone.isNotEmpty
+                            ? '${member.programTitle} • ${member.customerPhone}'
+                            : member.programTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
