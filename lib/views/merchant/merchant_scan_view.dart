@@ -51,6 +51,25 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
     super.dispose();
   }
 
+  Future<void> _requestCameraPermission() async {
+    try {
+      await _scannerController.stop();
+      await _scannerController.start();
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('Camera permission note: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Camera request: Please check browser permission icon near URL bar ($e)'),
+            backgroundColor: AppColors.accentRose,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
+  }
+
   void _onQrDetected(String rawCode) {
     if (_isProcessing) return;
     final code = rawCode.trim();
@@ -580,6 +599,11 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white70),
+            tooltip: 'Request / Restart Camera',
+            onPressed: _requestCameraPermission,
+          ),
+          IconButton(
             icon: Icon(
               _isTorchOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
               color: _isTorchOn ? AppColors.accentAmber : Colors.white70,
@@ -675,23 +699,50 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
                           },
                           errorBuilder: (context, error) {
                             return Center(
-                              child: Padding(
+                              child: SingleChildScrollView(
                                 padding: const EdgeInsets.all(16.0),
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Icon(Icons.videocam_off_rounded, color: Colors.white54, size: 44),
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.accentRose.withValues(alpha: 0.15),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.videocam_off_rounded, color: AppColors.accentRose, size: 36),
+                                    ),
                                     const SizedBox(height: 10),
                                     const Text(
-                                      'Camera stream inactive or denied',
+                                      'Camera Access Disabled',
                                       textAlign: TextAlign.center,
-                                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
                                     ),
-                                    const SizedBox(height: 6),
+                                    const SizedBox(height: 4),
                                     const Text(
-                                      'You can use the phone number input below',
+                                      'Click below to request camera permission:',
                                       textAlign: TextAlign.center,
-                                      style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                                      style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      height: 38,
+                                      child: ElevatedButton.icon(
+                                        onPressed: _requestCameraPermission,
+                                        icon: const Icon(Icons.camera_alt_rounded, size: 14),
+                                        label: const Text('Request Permission', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.primary,
+                                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'Or enter customer phone number below',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: AppColors.textMuted, fontSize: 10),
                                     ),
                                   ],
                                 ),

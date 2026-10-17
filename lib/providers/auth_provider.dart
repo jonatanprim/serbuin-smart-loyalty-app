@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
+import '../services/firestore_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   AppUser? _currentUser;
@@ -26,49 +27,9 @@ class AuthProvider extends ChangeNotifier {
       }
     }
 
-    // Default to Customer demo on clean start
-    _currentUser = _buildCustomerDemo();
-    await _saveUser();
+    // In real data mode: user must register or sign in.
+    _currentUser = null;
     notifyListeners();
-  }
-
-  AppUser _buildCustomerDemo() {
-    return AppUser(
-      id: 'cust-alex',
-      email: 'alex@serbuin.com',
-      name: 'Alex Morgan',
-      role: UserRole.customer,
-      phone: '+62 812-3456-7890',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      isProfileComplete: true,
-      customerProfile: CustomerProfile(
-        phone: '+62 812-3456-7890',
-        birthDate: '1998-05-14',
-        bio: 'Coffee connoisseur and weekend brunch lover.',
-        favoriteCategory: 'Cafe & Bakery',
-      ),
-    );
-  }
-
-  AppUser _buildMerchantDemo() {
-    return AppUser(
-      id: 'merchant-1',
-      email: 'merchant@serbuin.com',
-      name: 'Kopi Kenangan Artisan',
-      role: UserRole.merchant,
-      phone: '+62 811-9876-5432',
-      avatarUrl: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=150',
-      isProfileComplete: true,
-      merchantProfile: MerchantProfile(
-        businessName: 'Kopi Kenangan Artisan Cafe',
-        category: 'Cafe & Bakery',
-        address: 'Jl. Senopati No. 42, Kebayoran Baru, Jakarta Selatan',
-        phone: '+62 811-9876-5432',
-        operatingHours: '07:00 AM - 10:00 PM Daily',
-        description:
-            'Handcrafted specialty coffee, artisanal pastries, and cozy modern aesthetic.',
-      ),
-    );
   }
 
   Future<void> _saveUser() async {
@@ -83,6 +44,64 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> _saveToUserRegistry(AppUser user) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final registryJson = prefs.getString('serbuin_registered_users') ?? '[]';
+      final List list = jsonDecode(registryJson);
+      final index = list.indexWhere((u) => u['email'] == user.email && u['role'] == user.role.name);
+      if (index != -1) {
+        list[index] = user.toMap();
+      } else {
+        list.add(user.toMap());
+      }
+      await prefs.setString('serbuin_registered_users', jsonEncode(list));
+
+      // Also sync user to Firestore
+      FirestoreService().syncMember(MemberRecord(
+        id: user.id,
+        programId: '',
+        programTitle: 'Account Registry',
+        merchantId: user.role == UserRole.merchant ? user.id : '',
+        customerId: user.id,
+        customerName: user.name,
+        customerEmail: user.email,
+        customerPhone: user.phone ?? '',
+        stampsCollected: 0,
+        totalStampsRequired: 0,
+        status: 'active',
+        lastStampDate: DateTime.now(),
+        joinedDate: user.createdAt,
+        riskLevel: 'low',
+        riskReason: 'Active account',
+        recommendedVoucher: '',
+        aiInsight: 'Registered ${user.role.name}',
+      ));
+    } catch (e) {
+      debugPrint('Registry save note: $e');
+    }
+  }
+
+  Future<AppUser?> _findInUserRegistry(String email, UserRole role) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final registryJson = prefs.getString('serbuin_registered_users');
+      if (registryJson != null) {
+        final List list = jsonDecode(registryJson);
+        final match = list.firstWhere(
+          (u) => u['email']?.toString().toLowerCase() == email.toLowerCase() && u['role'] == role.name,
+          orElse: () => null,
+        );
+        if (match != null) {
+          return AppUser.fromMap(Map<String, dynamic>.from(match));
+        }
+      }
+    } catch (e) {
+      debugPrint('Registry lookup note: $e');
+    }
+    return null;
+  }
+
   Future<bool> login({
     required String email,
     required String password,
@@ -91,16 +110,47 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    await Future.delayed(const Duration(milliseconds: 600));
+    await Future.delayed(const Duration(milliseconds: 400));
 
-    if (role == UserRole.merchant) {
-      _currentUser = _buildMerchantDemo().copyWith(
-        email: email.trim().isEmpty ? 'merchant@serbuin.com' : email.trim(),
-      );
+    final cleanEmail = email.trim().toLowerCase();
+    final existingUser = await _findInUserRegistry(cleanEmail, role);
+
+    if (existingUser != null) {
+      _currentUser = existingUser;
     } else {
-      _currentUser = _buildCustomerDemo().copyWith(
-        email: email.trim().isEmpty ? 'alex@serbuin.com' : email.trim(),
+      // Create user session with their real entered credentials
+      final emailPrefix = cleanEmail.split('@').first;
+      final displayName = emailPrefix.isNotEmpty
+          ? emailPrefix[0].toUpperCase() + emailPrefix.substring(1)
+          : (role == UserRole.merchant ? 'Merchant Store' : 'Customer Member');
+
+      final id = '${role == UserRole.merchant ? 'merchant' : 'cust'}-${DateTime.now().millisecondsSinceEpoch}';
+      _currentUser = AppUser(
+        id: id,
+        name: displayName,
+        email: cleanEmail,
+        role: role,
+        isProfileComplete: true,
+        merchantProfile: role == UserRole.merchant
+            ? MerchantProfile(
+                businessName: displayName,
+                category: 'Cafe & Retail',
+                address: '',
+                phone: '',
+                operatingHours: '08:00 AM - 10:00 PM',
+                description: 'Welcome to $displayName!',
+              )
+            : null,
+        customerProfile: role == UserRole.customer
+            ? CustomerProfile(
+                phone: '',
+                birthDate: '',
+                bio: '',
+                favoriteCategory: 'General',
+              )
+            : null,
       );
+      await _saveToUserRegistry(_currentUser!);
     }
 
     await _saveUser();
@@ -114,41 +164,51 @@ class AuthProvider extends ChangeNotifier {
     required String email,
     required String password,
     required UserRole role,
+    String? phone,
   }) async {
     _isLoading = true;
     notifyListeners();
 
-    await Future.delayed(const Duration(milliseconds: 700));
+    await Future.delayed(const Duration(milliseconds: 500));
 
-    // Simple registration - minimal data, profile completion can be done later
-    _currentUser = AppUser(
-      id: 'user-${DateTime.now().millisecondsSinceEpoch}',
-      name: name.trim().isEmpty ? 'New User' : name.trim(),
-      email: email.trim(),
+    final id = '${role == UserRole.merchant ? 'merchant' : 'cust'}-${DateTime.now().millisecondsSinceEpoch}';
+    final cleanEmail = email.trim().toLowerCase();
+    final cleanName = name.trim().isNotEmpty ? name.trim() : 'User';
+
+    final newUser = AppUser(
+      id: id,
+      name: cleanName,
+      email: cleanEmail,
       role: role,
-      isProfileComplete: false,
+      phone: phone ?? '',
+      isProfileComplete: true,
+      merchantProfile: role == UserRole.merchant
+          ? MerchantProfile(
+              businessName: cleanName,
+              category: 'Cafe & Retail',
+              address: '',
+              phone: phone ?? '',
+              operatingHours: '08:00 AM - 10:00 PM',
+              description: 'Welcome to $cleanName!',
+            )
+          : null,
+      customerProfile: role == UserRole.customer
+          ? CustomerProfile(
+              phone: phone ?? '',
+              birthDate: '',
+              bio: '',
+              favoriteCategory: 'General',
+            )
+          : null,
     );
 
+    _currentUser = newUser;
     await _saveUser();
+    await _saveToUserRegistry(newUser);
+
     _isLoading = false;
     notifyListeners();
     return true;
-  }
-
-  Future<void> switchDemoRole(UserRole role) async {
-    _isLoading = true;
-    notifyListeners();
-
-    await Future.delayed(const Duration(milliseconds: 200));
-    if (role == UserRole.merchant) {
-      _currentUser = _buildMerchantDemo();
-    } else {
-      _currentUser = _buildCustomerDemo();
-    }
-
-    await _saveUser();
-    _isLoading = false;
-    notifyListeners();
   }
 
   Future<void> updateCustomerProfile({
@@ -173,6 +233,7 @@ class AuthProvider extends ChangeNotifier {
     );
 
     await _saveUser();
+    await _saveToUserRegistry(_currentUser!);
     notifyListeners();
   }
 
@@ -201,12 +262,14 @@ class AuthProvider extends ChangeNotifier {
     );
 
     await _saveUser();
+    await _saveToUserRegistry(_currentUser!);
     notifyListeners();
   }
 
   Future<void> logout() async {
     _currentUser = null;
-    await _saveUser();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('serbuin_current_user');
     notifyListeners();
   }
 }

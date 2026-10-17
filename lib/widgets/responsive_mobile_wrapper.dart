@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/models.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
 
@@ -147,6 +146,7 @@ class _ResponsiveMobileWrapperState extends State<ResponsiveMobileWrapper> {
                         const SizedBox(height: 24),
 
                         // Active Role Indicator & Quick Switch
+                        // Active Session Card
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
@@ -154,39 +154,57 @@ class _ResponsiveMobileWrapperState extends State<ResponsiveMobileWrapper> {
                             borderRadius: BorderRadius.circular(18),
                             border: Border.all(color: AppColors.border),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Row(
                             children: [
-                              const Text(
-                                'QUICK ROLE SWITCHER',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.textMuted,
-                                  letterSpacing: 1.1,
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: auth.isAuthenticated
+                                      ? (auth.isMerchant
+                                          ? AppColors.accentAmber.withValues(alpha: 0.15)
+                                          : AppColors.primary.withValues(alpha: 0.15))
+                                      : AppColors.surfaceLight,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  auth.isAuthenticated
+                                      ? (auth.isMerchant ? Icons.storefront_rounded : Icons.person_rounded)
+                                      : Icons.account_circle_outlined,
+                                  color: auth.isAuthenticated
+                                      ? (auth.isMerchant ? AppColors.accentAmber : AppColors.primaryLight)
+                                      : AppColors.textMuted,
+                                  size: 20,
                                 ),
                               ),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _RoleButton(
-                                      title: 'Customer',
-                                      icon: Icons.person_rounded,
-                                      isSelected: auth.currentUser?.role == UserRole.customer,
-                                      onTap: () => auth.switchDemoRole(UserRole.customer),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      auth.isAuthenticated
+                                          ? (auth.isMerchant ? 'MERCHANT ACCOUNT' : 'CUSTOMER ACCOUNT')
+                                          : 'REAL DATA MODE',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 1,
+                                        color: AppColors.textMuted,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: _RoleButton(
-                                      title: 'Merchant',
-                                      icon: Icons.storefront_rounded,
-                                      isSelected: auth.currentUser?.role == UserRole.merchant,
-                                      onTap: () => auth.switchDemoRole(UserRole.merchant),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      auth.currentUser?.name ?? 'Ready to Sign In',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -354,57 +372,6 @@ class _ResponsiveMobileWrapperState extends State<ResponsiveMobileWrapper> {
   }
 }
 
-class _RoleButton extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _RoleButton({
-    required this.title,
-    required this.icon,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : AppColors.surfaceLight,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? AppColors.primaryLight : AppColors.border,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: isSelected ? Colors.white : AppColors.textSecondary,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: isSelected ? Colors.white : AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _FeatureBadge extends StatelessWidget {
   final IconData icon;

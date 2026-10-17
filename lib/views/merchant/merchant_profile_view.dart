@@ -4,6 +4,7 @@ import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/gemini_ai_service.dart';
 import '../../theme/app_theme.dart';
+import '../auth/role_selection_view.dart';
 
 class MerchantProfileView extends StatefulWidget {
   final AppUser user;
@@ -288,7 +289,12 @@ class _MerchantProfileViewState extends State<MerchantProfileView> {
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: () async {
+                    final navigator = Navigator.of(context);
                     await auth.logout();
+                    navigator.pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (_) => const RoleSelectionView()),
+                      (route) => false,
+                    );
                   },
                   icon: const Icon(Icons.logout_rounded, color: AppColors.accentRose, size: 18),
                   label: const Text('Log Out (Switch Role)', style: TextStyle(color: AppColors.accentRose, fontWeight: FontWeight.w700)),

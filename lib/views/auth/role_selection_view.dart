@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../models/models.dart';
-import '../../providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
 import 'login_view.dart';
 import 'register_view.dart';
@@ -11,8 +9,6 @@ class RoleSelectionView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.read<AuthProvider>();
-
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -72,7 +68,7 @@ class RoleSelectionView extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               const Text(
-                'Choose how you want to experience Serbuin today',
+                'Choose your role to get started with Serbuin',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -90,7 +86,6 @@ class RoleSelectionView extends StatelessWidget {
                     'Collect digital stamps, browse stacked cards, unlock rewards, and redeem dynamic QR vouchers.',
                 icon: Icons.person_rounded,
                 accentGradient: AppColors.primaryGradient,
-                demoButtonText: 'Quick Demo as Customer',
                 onSelectRole: () {
                   Navigator.push(
                     context,
@@ -99,7 +94,6 @@ class RoleSelectionView extends StatelessWidget {
                     ),
                   );
                 },
-                onQuickDemo: () => auth.switchDemoRole(UserRole.customer),
               ),
 
               const SizedBox(height: 20),
@@ -112,7 +106,6 @@ class RoleSelectionView extends StatelessWidget {
                     'Create AI loyalty programs (up to 3 cards), scan customer QR stamps, redeem vouchers & scan churn risks.',
                 icon: Icons.storefront_rounded,
                 accentGradient: AppColors.warmGradient,
-                demoButtonText: 'Quick Demo as Merchant',
                 onSelectRole: () {
                   Navigator.push(
                     context,
@@ -121,7 +114,6 @@ class RoleSelectionView extends StatelessWidget {
                     ),
                   );
                 },
-                onQuickDemo: () => auth.switchDemoRole(UserRole.merchant),
               ),
 
               const SizedBox(height: 32),
@@ -167,9 +159,7 @@ class _RoleOptionCard extends StatelessWidget {
   final String subtitle;
   final IconData icon;
   final LinearGradient accentGradient;
-  final String demoButtonText;
   final VoidCallback onSelectRole;
-  final VoidCallback onQuickDemo;
 
   const _RoleOptionCard({
     required this.roleTitle,
@@ -177,9 +167,7 @@ class _RoleOptionCard extends StatelessWidget {
     required this.subtitle,
     required this.icon,
     required this.accentGradient,
-    required this.demoButtonText,
     required this.onSelectRole,
-    required this.onQuickDemo,
   });
 
   @override
@@ -262,51 +250,23 @@ class _RoleOptionCard extends StatelessWidget {
           const Divider(height: 1, color: AppColors.border),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: onSelectRole,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: AppColors.border),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text('Sign In', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            child: SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: onSelectRole,
+                icon: const Icon(Icons.login_rounded, size: 18),
+                label: Text(
+                  'Continue as $roleTitle',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentGradient.colors.first,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    onPressed: onQuickDemo,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: accentGradient.colors.first,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.bolt_rounded, size: 16),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            demoButtonText,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],

@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/mock_database_service.dart';
 import '../../theme/app_theme.dart';
+import '../../providers/auth_provider.dart';
+import '../auth/role_selection_view.dart';
 import 'merchant_create_program_view.dart';
 import 'merchant_profile_view.dart';
 import 'merchant_program_detail_view.dart';
@@ -115,6 +117,54 @@ class MerchantHomeView extends StatelessWidget {
                           ),
                         ],
                       ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Logout Button
+                  InkWell(
+                    onTap: () async {
+                      final shouldLogout = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          backgroundColor: AppColors.surfaceCard,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            side: const BorderSide(color: AppColors.border),
+                          ),
+                          title: const Text('Confirm Logout', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                          content: const Text('Are you sure you want to log out of merchant account?', style: TextStyle(color: AppColors.textSecondary)),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+                            ),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              style: ElevatedButton.styleFrom(backgroundColor: AppColors.accentRose),
+                              child: const Text('Log Out'),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (shouldLogout == true && context.mounted) {
+                        final navigator = Navigator.of(context);
+                        await context.read<AuthProvider>().logout();
+                        navigator.pushAndRemoveUntil(
+                          MaterialPageRoute(builder: (_) => const RoleSelectionView()),
+                          (route) => false,
+                        );
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentRose.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.accentRose.withValues(alpha: 0.3)),
+                      ),
+                      child: const Icon(Icons.logout_rounded, color: AppColors.accentRose, size: 18),
                     ),
                   ),
                 ],

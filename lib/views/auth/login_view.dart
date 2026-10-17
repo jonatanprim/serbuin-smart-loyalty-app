@@ -24,13 +24,6 @@ class _LoginViewState extends State<LoginView> {
   void initState() {
     super.initState();
     _selectedRole = widget.initialRole;
-    if (_selectedRole == UserRole.merchant) {
-      _emailController.text = 'merchant@serbuin.com';
-      _passwordController.text = 'password123';
-    } else {
-      _emailController.text = 'alex@serbuin.com';
-      _passwordController.text = 'password123';
-    }
   }
 
   @override
@@ -43,11 +36,6 @@ class _LoginViewState extends State<LoginView> {
   void _onRoleChanged(UserRole role) {
     setState(() {
       _selectedRole = role;
-      if (role == UserRole.merchant) {
-        _emailController.text = 'merchant@serbuin.com';
-      } else {
-        _emailController.text = 'alex@serbuin.com';
-      }
     });
   }
 
