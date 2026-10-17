@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 import 'cloud_run_service.dart';
+import 'firestore_service.dart';
 
 class MockDatabaseService extends ChangeNotifier {
   static final MockDatabaseService _instance = MockDatabaseService._internal();
@@ -340,6 +341,9 @@ class MockDatabaseService extends ChangeNotifier {
 
     await _saveToStorage();
     notifyListeners();
+
+    // Sync to Cloud Firestore
+    FirestoreService().syncProgram(newProgram);
     return true;
   }
 
@@ -350,6 +354,9 @@ class MockDatabaseService extends ChangeNotifier {
       _programs[index] = updatedProgram;
       await _saveToStorage();
       notifyListeners();
+
+      // Sync to Cloud Firestore
+      FirestoreService().syncProgram(updatedProgram);
     }
   }
 
@@ -364,6 +371,9 @@ class MockDatabaseService extends ChangeNotifier {
     _programs.removeWhere((p) => p.id == programId);
     await _saveToStorage();
     notifyListeners();
+
+    // Delete from Cloud Firestore
+    FirestoreService().deleteProgram(programId);
     return true;
   }
 
@@ -441,6 +451,9 @@ class MockDatabaseService extends ChangeNotifier {
     await _saveToStorage();
     notifyListeners();
 
+    // Sync to Cloud Firestore
+    FirestoreService().syncMember(member);
+
     // Trigger Cloud Run FCM push notification
     CloudRunService().sendFcmNotification(
       customerId: customerId,
@@ -498,6 +511,9 @@ class MockDatabaseService extends ChangeNotifier {
     await _saveToStorage();
     notifyListeners();
 
+    // Sync to Cloud Firestore
+    FirestoreService().syncVoucher(updated);
+
     return {
       'success': true,
       'voucher': updated,
@@ -554,6 +570,10 @@ class MockDatabaseService extends ChangeNotifier {
 
     await _saveToStorage();
     notifyListeners();
+
+    // Sync to Cloud Firestore
+    FirestoreService().syncVoucher(newVoucher);
+    FirestoreService().syncMember(_members[memberIndex]);
 
     // Trigger Cloud Run FCM push notification to customer
     CloudRunService().sendFcmNotification(
@@ -622,6 +642,11 @@ class MockDatabaseService extends ChangeNotifier {
 
     await _saveToStorage();
     notifyListeners();
+
+    // Sync to Cloud Firestore
+    FirestoreService().syncVoucher(voucher);
+    FirestoreService().syncMember(_members[memberIndex]);
+
     return voucher;
   }
 

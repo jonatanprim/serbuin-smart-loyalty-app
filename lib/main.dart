@@ -1,7 +1,10 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'firebase_options.dart';
 import 'models/models.dart';
 import 'providers/auth_provider.dart';
+import 'services/firestore_service.dart';
 import 'services/mock_database_service.dart';
 import 'theme/app_theme.dart';
 import 'views/auth/role_selection_view.dart';
@@ -11,6 +14,17 @@ import 'widgets/responsive_mobile_wrapper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase & Cloud Firestore in dual-mode (cloud + local fallback)
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    FirestoreService().init();
+    debugPrint('Firebase & Firestore connected successfully.');
+  } catch (e) {
+    debugPrint('Firebase running in resilient dual-mode: $e');
+  }
 
   final authProvider = AuthProvider();
   final dbService = MockDatabaseService();
