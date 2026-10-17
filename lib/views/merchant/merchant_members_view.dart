@@ -469,16 +469,18 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
     final member = widget.member;
     final isHigh = member.riskLevel == 'high';
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceCard,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
+        decoration: const BoxDecoration(
+          color: AppColors.surfaceCard,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Center(
             child: Container(
               width: 40,
@@ -624,6 +626,7 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
           const SizedBox(height: 12),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }

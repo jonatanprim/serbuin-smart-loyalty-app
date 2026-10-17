@@ -325,15 +325,17 @@ class _VoucherDetailWithTimerSheetState extends State<_VoucherDetailWithTimerShe
     final voucher = widget.voucher;
     final dynamicQrPayload = '${voucher.code}-REF$_refreshCounter';
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceCard,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        decoration: const BoxDecoration(
+          color: AppColors.surfaceCard,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
           Container(
             width: 40,
             height: 4,
@@ -446,6 +448,7 @@ class _VoucherDetailWithTimerSheetState extends State<_VoucherDetailWithTimerShe
           const SizedBox(height: 10),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }

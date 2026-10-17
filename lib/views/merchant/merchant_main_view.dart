@@ -80,7 +80,7 @@ class _MerchantMainViewState extends State<MerchantMainView> {
           notchMargin: 10,
           elevation: 0,
           height: 68,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 32),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -92,31 +92,15 @@ class _MerchantMainViewState extends State<MerchantMainView> {
                 onTap: () => setState(() => _currentIndex = 0),
               ),
 
-              // Left-Center: Members
+              // Notch spacer for the center round floating Scan button
+              const SizedBox(width: 48),
+
+              // Right: Members
               _NavBarItem(
                 icon: Icons.people_alt_rounded,
                 label: 'Members',
                 isSelected: _currentIndex == 1,
                 onTap: () => setState(() => _currentIndex = 1),
-              ),
-
-              // Spacer for the center floating button
-              const SizedBox(width: 48),
-
-              // Right-Center: Guide / Quick Scan label indicator
-              _NavBarItem(
-                icon: Icons.center_focus_strong_rounded,
-                label: 'Scan QR',
-                isSelected: false,
-                onTap: _openScanView,
-              ),
-
-              // Right: Profile
-              _NavBarItem(
-                icon: Icons.account_circle_rounded,
-                label: 'Profile',
-                isSelected: _currentIndex == 2,
-                onTap: () => setState(() => _currentIndex = 2),
               ),
             ],
           ),

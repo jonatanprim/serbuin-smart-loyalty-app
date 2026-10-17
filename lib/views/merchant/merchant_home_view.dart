@@ -4,6 +4,7 @@ import '../../models/models.dart';
 import '../../services/mock_database_service.dart';
 import '../../theme/app_theme.dart';
 import 'merchant_create_program_view.dart';
+import 'merchant_profile_view.dart';
 import 'merchant_program_detail_view.dart';
 
 class MerchantHomeView extends StatelessWidget {
@@ -77,30 +78,43 @@ class MerchantHomeView extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceLight,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: AppColors.accentEmerald,
-                            shape: BoxShape.circle,
+                  // Profile Button in Top Right
+                  InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MerchantProfileView(user: user),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              gradient: AppColors.primaryGradient,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.person_rounded, size: 14, color: Colors.white),
                           ),
-                        ),
-                        const SizedBox(width: 6),
-                        const Text(
-                          'Live Store',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
-                        ),
-                      ],
+                          const SizedBox(width: 6),
+                          const Text(
+                            'Profile',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],

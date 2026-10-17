@@ -12,15 +12,17 @@ class CustomerQrBottomSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final qrPayload = '${user.id}|${user.name}';
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceCard,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+        decoration: const BoxDecoration(
+          color: AppColors.surfaceCard,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
           // Drag handle
           Container(
             width: 40,
@@ -141,6 +143,7 @@ class CustomerQrBottomSheet extends StatelessWidget {
           const SizedBox(height: 12),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
