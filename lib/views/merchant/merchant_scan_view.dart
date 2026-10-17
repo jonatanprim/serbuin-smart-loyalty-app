@@ -1,7 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/mock_database_service.dart';
@@ -16,134 +14,42 @@ class MerchantScanView extends StatefulWidget {
   State<MerchantScanView> createState() => _MerchantScanViewState();
 }
 
-class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerProviderStateMixin {
-  final _phoneController = TextEditingController();
-  late AnimationController _laserController;
-  late MobileScannerController _scannerController;
+class _MerchantScanViewState extends State<MerchantScanView> {
+  late final MobileScannerController _scannerController;
   bool _isProcessing = false;
   String? _selectedProgramId;
-  bool _isTorchOn = false;
-  bool _isRequestingCamera = false;
+  String? _lastScannedCode;
+  DateTime? _lastScannedTime;
 
   @override
   void initState() {
     super.initState();
-    _laserController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-
-    _scannerController = MobileScannerController(
-      autoStart: false,
-      detectionSpeed: DetectionSpeed.normal,
-      facing: kIsWeb ? CameraFacing.front : CameraFacing.back,
-      torchEnabled: false,
-    );
+    _scannerController = MobileScannerController();
 
     final db = context.read<MockDatabaseService>();
     final merchantProgs = db.programs.where((p) => p.merchantId == widget.merchantId).toList();
     if (merchantProgs.isNotEmpty) {
       _selectedProgramId = merchantProgs.first.id;
     }
-
-    // Attempt camera start after widget is fully mounted in tree
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _requestCameraPermission();
-      }
-    });
   }
 
   @override
   void dispose() {
-    _phoneController.dispose();
-    _laserController.dispose();
     _scannerController.dispose();
     super.dispose();
   }
 
-  Future<void> _requestCameraPermission() async {
-    if (_isRequestingCamera) return;
-    setState(() => _isRequestingCamera = true);
+  void _showInputManualSheet() async {
+    final phone = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const _InputManualBottomSheet(),
+    );
 
-    try {
-      // 1. Explicitly request camera permission using permission_handler on mobile platforms
-      if (!kIsWeb) {
-        final status = await Permission.camera.request();
-        if (status.isPermanentlyDenied && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Camera permission permanently denied. Tap Settings to enable it.'),
-              action: SnackBarAction(
-                label: 'Settings',
-                textColor: Colors.white,
-                onPressed: () => openAppSettings(),
-              ),
-              backgroundColor: AppColors.accentRose,
-              duration: const Duration(seconds: 6),
-            ),
-          );
-          return;
-        }
-      }
-
-      if (!mounted) return;
-
-      // 2. Stop if already running to prevent double-start collisions
-      if (_scannerController.value.isRunning) {
-        await _scannerController.stop();
-      }
-
-      // 3. Call start() with facing parameter directly
-      await _scannerController.start(
-        cameraDirection: kIsWeb ? CameraFacing.front : CameraFacing.back,
-      );
-    } catch (e) {
-      debugPrint('Primary camera start attempt: $e');
-      // If primary camera fails (e.g. desktop webcam without environment lens), fallback directly to front camera
-      try {
-        if (!_scannerController.value.isRunning) {
-          await _scannerController.start(cameraDirection: CameraFacing.front);
-        }
-      } catch (e2) {
-        debugPrint('Fallback camera start attempt: $e2');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Camera: Tap the lock icon in your browser address bar to allow camera access ($e2)'),
-              backgroundColor: AppColors.accentRose,
-              duration: const Duration(seconds: 5),
-            ),
-          );
-        }
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isRequestingCamera = false);
-      }
+    if (phone != null && phone.isNotEmpty) {
+      _handleCustomerLookup(phone);
     }
-  }
-
-  void _onQrDetected(String rawCode) {
-    if (_isProcessing) return;
-    final code = rawCode.trim();
-    if (code.isEmpty) return;
-
-    _handleCustomerLookup(code);
-  }
-
-  void _handlePhoneSubmit() {
-    final phone = _phoneController.text.trim();
-    if (phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid phone number.'),
-          backgroundColor: AppColors.accentRose,
-        ),
-      );
-      return;
-    }
-    _handleCustomerLookup(phone);
   }
 
   void _handleCustomerLookup(String query) {
@@ -170,7 +76,7 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
       orElse: () => merchantProgs.first,
     );
 
-    // Parse potential QR payload: "cust-alex|Alex Morgan" or "cust-alex" or phone
+    // Parse potential QR payload: "cust-alex|Alex Morgan|phone" or "cust-alex" or phone
     String customerId = query;
     String customerName = 'Alex Morgan';
     String customerPhone = query;
@@ -195,7 +101,6 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
       customerPhone = existingMember.customerPhone;
       currentStamps = existingMember.stampsCollected;
     } else {
-      // Clean phone or ID
       if (customerId.startsWith('cust-')) {
         customerName = customerId.replaceAll('cust-', '').toUpperCase();
       } else {
@@ -426,7 +331,7 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
                                         : isExisting
                                             ? AppColors.primaryLight
                                             : AppColors.border,
-                                    width: isNewAward ? 2 : 1,
+                                    width: 1.5,
                                   ),
                                 ),
                                 child: Icon(
@@ -445,15 +350,16 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
                       ),
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 22),
 
-                    // Counter Section: How much stamp to give
+                    // Counter to add stamps
                     const Text(
-                      'How many stamps to award?',
+                      'HOW MANY STAMPS TO AWARD?',
                       style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
+                        color: AppColors.textMuted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -461,21 +367,19 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Minus button
+                        // Decrement button
                         InkWell(
                           onTap: stampsToAdd > 1
                               ? () => setSheetState(() => stampsToAdd--)
                               : null,
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(14),
                           child: Container(
-                            width: 50,
-                            height: 50,
+                            width: 44,
+                            height: 44,
                             decoration: BoxDecoration(
-                              color: stampsToAdd > 1 ? AppColors.surfaceLight : AppColors.surfaceCard,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: stampsToAdd > 1 ? AppColors.border : AppColors.border.withValues(alpha: 0.3),
-                              ),
+                              color: AppColors.surfaceLight,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppColors.border),
                             ),
                             child: Icon(
                               Icons.remove_rounded,
@@ -484,57 +388,40 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
                             ),
                           ),
                         ),
+                        const SizedBox(width: 24),
 
-                        // Stamp Counter Display
+                        // Current stamps to add display
                         Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 20),
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                AppColors.primary.withValues(alpha: 0.25),
-                                AppColors.accentEmerald.withValues(alpha: 0.25),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: AppColors.accentEmerald.withValues(alpha: 0.6)),
+                            color: AppColors.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.workspace_premium_rounded, color: AppColors.accentEmerald, size: 24),
-                              const SizedBox(width: 8),
-                              Text(
-                                '+$stampsToAdd',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ],
+                          child: Text(
+                            '+$stampsToAdd',
+                            style: const TextStyle(
+                              color: AppColors.primaryLight,
+                              fontSize: 28,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
+                        const SizedBox(width: 24),
 
-                        // Plus button
+                        // Increment button
                         InkWell(
                           onTap: (currentStamps + stampsToAdd < targetProgram.totalStamps)
                               ? () => setSheetState(() => stampsToAdd++)
                               : null,
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(14),
                           child: Container(
-                            width: 50,
-                            height: 50,
+                            width: 44,
+                            height: 44,
                             decoration: BoxDecoration(
-                              color: (currentStamps + stampsToAdd < targetProgram.totalStamps)
-                                  ? AppColors.surfaceLight
-                                  : AppColors.surfaceCard,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: (currentStamps + stampsToAdd < targetProgram.totalStamps)
-                                    ? AppColors.border
-                                    : AppColors.border.withValues(alpha: 0.3),
-                              ),
+                              color: AppColors.surfaceLight,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppColors.border),
                             ),
                             child: Icon(
                               Icons.add_rounded,
@@ -583,11 +470,11 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
                           );
 
                           if (bottomSheetCtx.mounted) {
-                            Navigator.pop(bottomSheetCtx); // Close bottomsheet
+                            Navigator.pop(bottomSheetCtx);
                           }
 
                           if (mounted) {
-                            navigator.pop(); // Close MerchantScanView & navigate to Home
+                            navigator.pop(); // Close scanner and return to Home
 
                             messenger.showSnackBar(
                               SnackBar(
@@ -640,459 +527,420 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
 
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        title: const Text(
-          'Scan Customer QR',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
-        ),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.close_rounded, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: Colors.white70),
-            tooltip: 'Request / Restart Camera',
-            onPressed: _requestCameraPermission,
-          ),
-          IconButton(
-            icon: Icon(
-              _isTorchOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-              color: _isTorchOn ? AppColors.accentAmber : Colors.white70,
-            ),
-            onPressed: () {
-              if (_scannerController.value.isInitialized && _scannerController.value.isRunning) {
-                setState(() => _isTorchOn = !_isTorchOn);
-                _scannerController.toggleTorch();
-              } else {
-                _requestCameraPermission();
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 1. Fullscreen Camera Scanner Feed
+          MobileScanner(
+            controller: _scannerController,
+            onDetect: (capture) {
+              if (_isProcessing) return;
+              final List<Barcode> barcodes = capture.barcodes;
+              if (barcodes.isNotEmpty) {
+                final String? code = barcodes.first.rawValue;
+                if (code != null && code.isNotEmpty) {
+                  if (_lastScannedCode == code &&
+                      _lastScannedTime != null &&
+                      DateTime.now().difference(_lastScannedTime!).inSeconds < 3) {
+                    return;
+                  }
+                  _lastScannedCode = code;
+                  _lastScannedTime = DateTime.now();
+                  _handleCustomerLookup(code);
+                }
               }
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.cameraswitch_rounded, color: Colors.white70),
-            onPressed: () {
-              if (_scannerController.value.isInitialized && _scannerController.value.isRunning) {
-                _scannerController.switchCamera();
-              } else {
-                _requestCameraPermission();
-              }
-            },
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Target Program Selector
-              if (merchantProgs.isNotEmpty) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceLight,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Row(
+
+          // 2. Translucent Vignette Mask & Scanning Frame Overlay
+          const QRScannerOverlay(scanAreaSize: 260),
+
+          // 3. Top Floating Navigation Bar & Loyalty Program Selector
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Icon(Icons.card_giftcard_rounded, size: 18, color: AppColors.primaryLight),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _selectedProgramId ?? merchantProgs.first.id,
-                            dropdownColor: AppColors.surfaceCard,
-                            isExpanded: true,
-                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
-                            items: merchantProgs.map((p) {
-                              return DropdownMenuItem(
-                                value: p.id,
-                                child: Text('Target: ${p.title} (${p.totalStamps} stamps)'),
-                              );
-                            }).toList(),
-                            onChanged: (val) {
-                              if (val != null) setState(() => _selectedProgramId = val);
-                            },
-                          ),
+                      // Close / Back button
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ),
+
+                      const Text(
+                        'Scan Customer QR',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
+                      ),
+
+                      // Torch toggle button
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.flash_on_rounded, color: Colors.white, size: 20),
+                          onPressed: () => _scannerController.toggleTorch(),
                         ),
                       ),
                     ],
+                  ),
+
+                  // Target program picker chip
+                  if (merchantProgs.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.65),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedProgramId ?? merchantProgs.first.id,
+                          dropdownColor: AppColors.surfaceCard,
+                          isDense: true,
+                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                          items: merchantProgs.map((p) {
+                            return DropdownMenuItem(
+                              value: p.id,
+                              child: Text('Awarding to: ${p.title} (${p.totalStamps} stamps)'),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) setState(() => _selectedProgramId = val);
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          // 4. Bottom Controls Overlay: Guidance & Manual Input Button
+          Positioned(
+            bottom: 36,
+            left: 24,
+            right: 24,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Text(
+                    'Point camera at customer\'s QR code',
+                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                    textAlign: TextAlign.center,
                   ),
                 ),
                 const SizedBox(height: 16),
+
+                // Manual Input Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: OutlinedButton.icon(
+                    onPressed: _showInputManualSheet,
+                    icon: const Icon(Icons.dialpad_rounded, size: 18),
+                    label: const Text(
+                      'Input Phone Number Manually',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white, width: 1.5),
+                      backgroundColor: Colors.black.withValues(alpha: 0.4),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                  ),
+                ),
               ],
-
-              // Live Camera Scanner Viewport with Overlay
-              Center(
-                child: Container(
-                  width: 280,
-                  height: 280,
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(28),
-                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.6), width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.3),
-                        blurRadius: 28,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(26),
-                    child: Stack(
-                      children: [
-                        // Live Camera feed
-                        MobileScanner(
-                          controller: _scannerController,
-                          onDetect: (capture) {
-                            final List<Barcode> barcodes = capture.barcodes;
-                            for (final barcode in barcodes) {
-                              final String? val = barcode.rawValue;
-                              if (val != null && val.isNotEmpty) {
-                                _onQrDetected(val);
-                                break;
-                              }
-                            }
-                          },
-                          placeholderBuilder: (context) {
-                            return Center(
-                              child: SingleChildScrollView(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(14),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primary.withValues(alpha: 0.15),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(Icons.camera_alt_rounded, color: AppColors.primaryLight, size: 36),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      _isRequestingCamera ? 'Requesting Camera...' : 'Camera Scanner',
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      _isRequestingCamera
-                                          ? 'Please click "Allow" on the browser prompt'
-                                          : 'Tap below to activate camera & allow permission',
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                                    ),
-                                    const SizedBox(height: 14),
-                                    SizedBox(
-                                      height: 38,
-                                      child: ElevatedButton.icon(
-                                        onPressed: _isRequestingCamera ? null : _requestCameraPermission,
-                                        icon: _isRequestingCamera
-                                            ? const SizedBox(
-                                                width: 14,
-                                                height: 14,
-                                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                              )
-                                            : const Icon(Icons.videocam_rounded, size: 16),
-                                        label: Text(
-                                          _isRequestingCamera ? 'Requesting...' : 'Activate Camera',
-                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                                        ),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: AppColors.primary,
-                                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error) {
-                            return Center(
-                              child: SingleChildScrollView(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.accentRose.withValues(alpha: 0.15),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(Icons.videocam_off_rounded, color: AppColors.accentRose, size: 36),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    const Text(
-                                      'Camera Access Needed',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    const Text(
-                                      'Click below to grant camera permission:',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    SizedBox(
-                                      height: 38,
-                                      child: ElevatedButton.icon(
-                                        onPressed: _isRequestingCamera ? null : _requestCameraPermission,
-                                        icon: const Icon(Icons.camera_alt_rounded, size: 14),
-                                        label: const Text('Request Permission', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: AppColors.primary,
-                                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    const Text(
-                                      'Or enter customer phone number below',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(color: AppColors.textMuted, fontSize: 10),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-
-                        // Corner targeting markers
-                        ..._buildCornerMarkers(),
-
-                        // Animated scanning laser (only while running)
-                        ValueListenableBuilder<MobileScannerState>(
-                          valueListenable: _scannerController,
-                          builder: (context, state, _) {
-                            if (!state.isRunning) return const SizedBox.shrink();
-                            return AnimatedBuilder(
-                              animation: _laserController,
-                              builder: (context, child) {
-                                return Positioned(
-                                  top: 20 + (_laserController.value * 230),
-                                  left: 15,
-                                  right: 15,
-                                  child: Container(
-                                    height: 3,
-                                    decoration: BoxDecoration(
-                                      gradient: const LinearGradient(
-                                        colors: [
-                                          Colors.transparent,
-                                          AppColors.accentCyan,
-                                          AppColors.primaryLight,
-                                          Colors.transparent,
-                                        ],
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppColors.accentCyan.withValues(alpha: 0.8),
-                                          blurRadius: 10,
-                                          spreadRadius: 2,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        ),
-
-                        // Bottom scanner hint
-                        Positioned(
-                          bottom: 12,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.6),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                _isProcessing ? 'Processing QR...' : 'Point camera at customer QR',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Manual Phone Number Input Section
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceCard,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: const [
-                        Icon(Icons.dialpad_rounded, size: 16, color: AppColors.primaryLight),
-                        SizedBox(width: 8),
-                        Text(
-                          'Or Award Stamps by Phone Number',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Enter customer phone number to look up their stamp count:',
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Phone Number Input and Submit
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceLight,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: TextField(
-                              controller: _phoneController,
-                              keyboardType: TextInputType.phone,
-                              style: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w600),
-                              decoration: const InputDecoration(
-                                hintText: 'Enter phone number (e.g. 081234567890)',
-                                hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                                contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                                border: InputBorder.none,
-                                enabledBorder: InputBorder.none,
-                                focusedBorder: InputBorder.none,
-                                filled: false,
-                                prefixIcon: Icon(Icons.phone_rounded, color: AppColors.textMuted, size: 18),
-                              ),
-                              onSubmitted: (_) => _handlePhoneSubmit(),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        SizedBox(
-                          height: 48,
-                          child: ElevatedButton(
-                            onPressed: _isProcessing ? null : _handlePhoneSubmit,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              padding: const EdgeInsets.symmetric(horizontal: 18),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            ),
-                            child: const Text(
-                              'Submit',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
+}
 
-  List<Widget> _buildCornerMarkers() {
-    return [
-      Positioned(
-        top: 10,
-        left: 10,
-        child: Container(
-          width: 24,
-          height: 24,
-          decoration: const BoxDecoration(
-            border: Border(
-              top: BorderSide(color: AppColors.accentCyan, width: 3),
-              left: BorderSide(color: AppColors.accentCyan, width: 3),
-            ),
-          ),
-        ),
-      ),
-      Positioned(
-        top: 10,
-        right: 10,
-        child: Container(
-          width: 24,
-          height: 24,
-          decoration: const BoxDecoration(
-            border: Border(
-              top: BorderSide(color: AppColors.accentCyan, width: 3),
-              right: BorderSide(color: AppColors.accentCyan, width: 3),
-            ),
-          ),
-        ),
-      ),
-      Positioned(
-        bottom: 10,
-        left: 10,
-        child: Container(
-          width: 24,
-          height: 24,
-          decoration: const BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: AppColors.accentCyan, width: 3),
-              left: BorderSide(color: AppColors.accentCyan, width: 3),
-            ),
-          ),
-        ),
-      ),
-      Positioned(
-        bottom: 10,
-        right: 10,
-        child: Container(
-          width: 24,
-          height: 24,
-          decoration: const BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: AppColors.accentCyan, width: 3),
-              right: BorderSide(color: AppColors.accentCyan, width: 3),
-            ),
-          ),
-        ),
-      ),
-    ];
+/// Bottom Sheet for Manual Phone Input
+class _InputManualBottomSheet extends StatefulWidget {
+  const _InputManualBottomSheet();
+
+  @override
+  State<_InputManualBottomSheet> createState() => _InputManualBottomSheetState();
+}
+
+class _InputManualBottomSheetState extends State<_InputManualBottomSheet> {
+  final _phoneController = TextEditingController();
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
   }
+
+  void _submit() {
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) return;
+    Navigator.of(context).pop(phone);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 44,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Manual Member Input',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Enter customer phone number to look up their membership card and award stamps.',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 20),
+          TextField(
+            controller: _phoneController,
+            keyboardType: TextInputType.phone,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Customer Phone Number',
+              hintText: 'e.g. 081234567890 or +62812...',
+              prefixIcon: Icon(Icons.phone_rounded, color: AppColors.primaryLight, size: 20),
+            ),
+            onSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: _submit,
+              icon: const Icon(Icons.search_rounded, size: 18),
+              label: const Text('Continue to Stamp Awarding', style: TextStyle(fontWeight: FontWeight.w700)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Translucent Vignette Overlay with Centered Cutout and Animated Laser
+class QRScannerOverlay extends StatefulWidget {
+  final Color overlayColor;
+  final double scanAreaSize;
+
+  const QRScannerOverlay({
+    super.key,
+    this.overlayColor = const Color(0x99000000),
+    this.scanAreaSize = 260.0,
+  });
+
+  @override
+  State<QRScannerOverlay> createState() => _QRScannerOverlayState();
+}
+
+class _QRScannerOverlayState extends State<QRScannerOverlay> with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+
+    _animation = Tween<double>(begin: 0, end: widget.scanAreaSize).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.linear),
+    );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        ColorFiltered(
+          colorFilter: ColorFilter.mode(widget.overlayColor, BlendMode.srcOut),
+          child: Stack(
+            children: [
+              Container(
+                decoration: const BoxDecoration(
+                  color: Colors.transparent,
+                ),
+              ),
+              Center(
+                child: Container(
+                  width: widget.scanAreaSize,
+                  height: widget.scanAreaSize,
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Center(
+          child: SizedBox(
+            width: widget.scanAreaSize,
+            height: widget.scanAreaSize,
+            child: Stack(
+              children: [
+                // Corner Brackets
+                CustomPaint(
+                  size: Size(widget.scanAreaSize, widget.scanAreaSize),
+                  painter: _ScannerFramePainter(color: AppColors.primaryLight),
+                ),
+                // Animated Scanning Laser Line
+                AnimatedBuilder(
+                  animation: _animation,
+                  builder: (context, child) {
+                    return Positioned(
+                      top: _animation.value,
+                      left: 4,
+                      right: 4,
+                      child: Container(
+                        height: 3,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              Colors.transparent,
+                              AppColors.accentCyan,
+                              AppColors.primaryLight,
+                              Colors.transparent,
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.accentCyan.withValues(alpha: 0.8),
+                              blurRadius: 10,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ScannerFramePainter extends CustomPainter {
+  final Color color;
+  static const double strokeWidth = 4.0;
+  static const double cornerLength = 32.0;
+  static const double cornerRadius = 20.0;
+
+  _ScannerFramePainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final path = Path();
+
+    // Top Left
+    path.moveTo(0, cornerLength);
+    path.lineTo(0, cornerRadius);
+    path.arcToPoint(const Offset(cornerRadius, 0), radius: const Radius.circular(cornerRadius));
+    path.lineTo(cornerLength, 0);
+
+    // Top Right
+    path.moveTo(size.width - cornerLength, 0);
+    path.lineTo(size.width - cornerRadius, 0);
+    path.arcToPoint(Offset(size.width, cornerRadius), radius: const Radius.circular(cornerRadius));
+    path.lineTo(size.width, cornerLength);
+
+    // Bottom Right
+    path.moveTo(size.width, size.height - cornerLength);
+    path.lineTo(size.width, size.height - cornerRadius);
+    path.arcToPoint(Offset(size.width - cornerRadius, size.height), radius: const Radius.circular(cornerRadius));
+    path.lineTo(size.width - cornerLength, size.height);
+
+    // Bottom Left
+    path.moveTo(cornerLength, size.height);
+    path.lineTo(cornerRadius, size.height);
+    path.arcToPoint(Offset(0, size.height - cornerRadius), radius: const Radius.circular(cornerRadius));
+    path.lineTo(0, size.height - cornerLength);
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
