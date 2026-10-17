@@ -24,7 +24,9 @@ class _MerchantScanViewState extends State<MerchantScanView> {
   @override
   void initState() {
     super.initState();
-    MobileScannerPlatform.instance.setBarcodeLibraryScriptUrl('zxing.min.js');
+    MobileScannerPlatform.instance.setBarcodeLibraryScriptUrl(
+      'https://unpkg.com/@zxing/library@0.21.3',
+    );
     _scannerController = MobileScannerController();
 
     final db = context.read<MockDatabaseService>();
