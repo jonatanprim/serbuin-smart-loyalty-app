@@ -35,9 +35,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
   
-  <!-- Preload ZXing Barcode & QR library from reliable CDN so scanner starts instantly -->
-  <link rel="preload" href="https://unpkg.com/@zxing/library@0.21.3" as="script">
-
+  <!-- ZXing Barcode & QR library UMD bundle directly loaded for instant, reliable scanning -->
+  <script id="mobile-scanner-barcode-reader" src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 </head>
 <body>
   <!--

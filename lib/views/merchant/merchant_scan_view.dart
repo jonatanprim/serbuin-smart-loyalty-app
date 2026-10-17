@@ -25,9 +25,17 @@ class _MerchantScanViewState extends State<MerchantScanView> {
   void initState() {
     super.initState();
     MobileScannerPlatform.instance.setBarcodeLibraryScriptUrl(
-      'https://unpkg.com/@zxing/library@0.21.3',
+      'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js',
     );
     _scannerController = MobileScannerController();
+
+    _scannerController.addListener(() {
+      final v = _scannerController.value;
+      debugPrint(
+        'scanner: init=${v.isInitialized} running=${v.isRunning} '
+        'starting=${v.isStarting} error=${v.error?.errorCode} ${v.error?.errorDetails?.message}',
+      );
+    });
 
     final db = context.read<MockDatabaseService>();
     final merchantProgs = db.programs.where((p) => p.merchantId == widget.merchantId).toList();

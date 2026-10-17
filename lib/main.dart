@@ -12,6 +12,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'models/models.dart';
+// ignore: depend_on_referenced_packages, implementation_imports
+import 'package:mobile_scanner/src/mobile_scanner_platform_interface.dart';
+// ignore: depend_on_referenced_packages, implementation_imports
+import 'package:mobile_scanner/src/web/mobile_scanner_web.dart';
 import 'providers/auth_provider.dart';
 import 'services/firestore_service.dart';
 import 'services/mock_database_service.dart';
@@ -28,6 +32,7 @@ void main() async {
     FirebaseCoreWeb.registerService('firestore');
     FirebasePlatform.instance = FirebaseCoreWeb();
     FirebaseFirestorePlatform.instance = FirebaseFirestoreWeb();
+    MobileScannerPlatform.instance = MobileScannerWeb();
   }
 
   // Initialize Firebase & Cloud Firestore in dual-mode (cloud + local fallback)
