@@ -111,6 +111,7 @@ class MockDatabaseService extends ChangeNotifier {
         customerId: 'cust-alex',
         customerName: 'Alex Morgan',
         customerEmail: 'alex@serbuin.com',
+        customerPhone: '+62 812-3456-7890',
         stampsCollected: 5,
         totalStampsRequired: 6,
         status: 'active',
@@ -129,6 +130,7 @@ class MockDatabaseService extends ChangeNotifier {
         customerId: 'cust-sarah',
         customerName: 'Sarah Jenkins',
         customerEmail: 'sarah.j@example.com',
+        customerPhone: '+62 812-9876-5432',
         stampsCollected: 4,
         totalStampsRequired: 6,
         status: 'active',
@@ -147,6 +149,7 @@ class MockDatabaseService extends ChangeNotifier {
         customerId: 'cust-david',
         customerName: 'David Chen',
         customerEmail: 'david.chen@example.com',
+        customerPhone: '+62 813-1122-3344',
         stampsCollected: 6,
         totalStampsRequired: 6,
         status: 'completed',
@@ -165,6 +168,7 @@ class MockDatabaseService extends ChangeNotifier {
         customerId: 'cust-jessica',
         customerName: 'Jessica Lee',
         customerEmail: 'jess.lee@example.com',
+        customerPhone: '+62 815-5566-7788',
         stampsCollected: 3,
         totalStampsRequired: 8,
         status: 'active',
@@ -183,6 +187,7 @@ class MockDatabaseService extends ChangeNotifier {
         customerId: 'cust-michael',
         customerName: 'Michael Taylor',
         customerEmail: 'mtaylor@example.com',
+        customerPhone: '+62 818-9988-7766',
         stampsCollected: 1,
         totalStampsRequired: 8,
         status: 'expired',
@@ -201,6 +206,7 @@ class MockDatabaseService extends ChangeNotifier {
         customerId: 'cust-emily',
         customerName: 'Emily Watson',
         customerEmail: 'emily.w@example.com',
+        customerPhone: '+62 817-0011-2233',
         stampsCollected: 2,
         totalStampsRequired: 6,
         status: 'active',
@@ -377,12 +383,94 @@ class MockDatabaseService extends ChangeNotifier {
     return true;
   }
 
-  /// Award stamp to a member by scanning QR
+  /// Find customer/member record by phone number, customer ID, or name
+  MemberRecord? findMemberByPhoneOrIdentifier({
+    required String query,
+    required String programId,
+  }) {
+    final cleanQuery = query.trim();
+    if (cleanQuery.isEmpty) return null;
+
+    final cleanDigits = cleanQuery.replaceAll(RegExp(r'[^0-9]'), '');
+    final cleanAlpha = cleanQuery.toLowerCase();
+
+    // 1. Search in the target program members
+    for (final m in _members.where((m) => m.programId == programId)) {
+      final phoneDigits = m.customerPhone.replaceAll(RegExp(r'[^0-9]'), '');
+      if (cleanDigits.length >= 6 && phoneDigits.isNotEmpty) {
+        if (phoneDigits.endsWith(cleanDigits) || cleanDigits.endsWith(phoneDigits)) {
+          return m;
+        }
+      }
+      if (m.customerId.toLowerCase() == cleanAlpha ||
+          m.customerName.toLowerCase() == cleanAlpha ||
+          m.customerName.toLowerCase().contains(cleanAlpha)) {
+        return m;
+      }
+    }
+
+    // 2. Search across other programs (to reuse name, phone, customerId)
+    for (final m in _members) {
+      final phoneDigits = m.customerPhone.replaceAll(RegExp(r'[^0-9]'), '');
+      if (cleanDigits.length >= 6 && phoneDigits.isNotEmpty) {
+        if (phoneDigits.endsWith(cleanDigits) || cleanDigits.endsWith(phoneDigits)) {
+          final prog = _programs.firstWhere((p) => p.id == programId, orElse: () => _programs.first);
+          return MemberRecord(
+            id: 'mem-${DateTime.now().millisecondsSinceEpoch}',
+            programId: programId,
+            programTitle: prog.title,
+            merchantId: prog.merchantId,
+            customerId: m.customerId,
+            customerName: m.customerName,
+            customerEmail: m.customerEmail,
+            customerPhone: m.customerPhone,
+            stampsCollected: 0,
+            totalStampsRequired: prog.totalStamps,
+            status: 'active',
+            lastStampDate: DateTime.now(),
+            joinedDate: DateTime.now(),
+            riskLevel: 'low',
+            riskReason: 'Enrolled in new program',
+            recommendedVoucher: 'Welcome treat',
+            aiInsight: 'Cross-program customer',
+          );
+        }
+      }
+      if (m.customerId.toLowerCase() == cleanAlpha ||
+          m.customerName.toLowerCase() == cleanAlpha) {
+        final prog = _programs.firstWhere((p) => p.id == programId, orElse: () => _programs.first);
+        return MemberRecord(
+          id: 'mem-${DateTime.now().millisecondsSinceEpoch}',
+          programId: programId,
+          programTitle: prog.title,
+          merchantId: prog.merchantId,
+          customerId: m.customerId,
+          customerName: m.customerName,
+          customerEmail: m.customerEmail,
+          customerPhone: m.customerPhone,
+          stampsCollected: 0,
+          totalStampsRequired: prog.totalStamps,
+          status: 'active',
+          lastStampDate: DateTime.now(),
+          joinedDate: DateTime.now(),
+          riskLevel: 'low',
+          riskReason: 'Enrolled in new program',
+          recommendedVoucher: 'Welcome treat',
+          aiInsight: 'Cross-program customer',
+        );
+      }
+    }
+
+    return null;
+  }
+
+  /// Award stamp to a member by scanning QR or entering phone
   Future<Map<String, dynamic>> awardStampToCustomer({
     required String merchantId,
     required String customerId,
     required String programId,
     String? customerName,
+    String? customerPhone,
     int count = 1,
   }) async {
     final progIndex = _programs.indexWhere((p) => p.id == programId);
@@ -408,6 +496,7 @@ class MockDatabaseService extends ChangeNotifier {
         lastStampDate: DateTime.now(),
         riskLevel: 'low',
         riskReason: 'Recently active in store.',
+        customerPhone: customerPhone ?? existing.customerPhone,
       );
       _members[memberIndex] = member;
     } else {
@@ -419,6 +508,7 @@ class MockDatabaseService extends ChangeNotifier {
         customerId: customerId,
         customerName: customerName ?? 'Serbuin Member',
         customerEmail: '$customerId@serbuin.com',
+        customerPhone: customerPhone ?? '+62 812-3456-7890',
         stampsCollected: count,
         totalStampsRequired: program.totalStamps,
         status: count >= program.totalStamps ? 'completed' : 'active',

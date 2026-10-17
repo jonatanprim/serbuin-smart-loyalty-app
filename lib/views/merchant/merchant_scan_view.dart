@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
+import '../../models/models.dart';
 import '../../services/mock_database_service.dart';
 import '../../theme/app_theme.dart';
 
@@ -13,10 +15,12 @@ class MerchantScanView extends StatefulWidget {
 }
 
 class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerProviderStateMixin {
-  final _manualCodeController = TextEditingController();
+  final _phoneController = TextEditingController();
   late AnimationController _laserController;
+  late MobileScannerController _scannerController;
   bool _isProcessing = false;
   String? _selectedProgramId;
+  bool _isTorchOn = false;
 
   @override
   void initState() {
@@ -25,6 +29,12 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
+
+    _scannerController = MobileScannerController(
+      detectionSpeed: DetectionSpeed.normal,
+      facing: CameraFacing.back,
+      torchEnabled: false,
+    );
 
     final db = context.read<MockDatabaseService>();
     final merchantProgs = db.programs.where((p) => p.merchantId == widget.merchantId).toList();
@@ -35,155 +45,518 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
 
   @override
   void dispose() {
-    _manualCodeController.dispose();
+    _phoneController.dispose();
     _laserController.dispose();
+    _scannerController.dispose();
     super.dispose();
   }
 
-  Future<void> _processScannedData(String rawData) async {
+  void _onQrDetected(String rawCode) {
+    if (_isProcessing) return;
+    final code = rawCode.trim();
+    if (code.isEmpty) return;
+
+    _handleCustomerLookup(code);
+  }
+
+  void _handlePhoneSubmit() {
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid phone number.'),
+          backgroundColor: AppColors.accentRose,
+        ),
+      );
+      return;
+    }
+    _handleCustomerLookup(phone);
+  }
+
+  void _handleCustomerLookup(String query) {
     if (_isProcessing) return;
     setState(() => _isProcessing = true);
 
     final db = context.read<MockDatabaseService>();
-    final code = rawData.trim();
+    final merchantProgs = db.programs.where((p) => p.merchantId == widget.merchantId).toList();
+    final programId = _selectedProgramId ?? (merchantProgs.isNotEmpty ? merchantProgs.first.id : '');
 
-    // Check if it's a voucher redemption code (starts with SERBUIN- or RET- or SRB-)
-    if (code.toUpperCase().startsWith('SERBUIN-') ||
-        code.toUpperCase().startsWith('SRB-') ||
-        code.toUpperCase().startsWith('RET-')) {
-      final res = await db.redeemVoucherByCode(code);
-      if (mounted) {
-        setState(() => _isProcessing = false);
-        _showResultDialog(
-          isSuccess: res['success'] ?? false,
-          title: res['success'] == true ? 'Voucher Redeemed!' : 'Redemption Failed',
-          message: res['message'] ?? '',
-          icon: res['success'] == true ? Icons.check_circle_rounded : Icons.error_outline_rounded,
-          accentColor: res['success'] == true ? AppColors.accentEmerald : AppColors.accentRose,
-        );
-      }
-      return;
-    }
-
-    // Otherwise treat as Customer Profile QR (awards stamp)
-    if (_selectedProgramId == null) {
+    if (programId.isEmpty) {
       setState(() => _isProcessing = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select an active program to award stamps.'),
+          content: Text('Please create or select an active loyalty program first.'),
           backgroundColor: AppColors.accentRose,
         ),
       );
       return;
     }
 
-    // Extract customer ID or default to Alex Morgan
-    String customerId = code.contains('cust-') ? code : 'cust-alex';
-    String customerName = 'Alex Morgan';
-    if (code.contains('|')) {
-      final parts = code.split('|');
-      customerId = parts[0];
-      if (parts.length > 1) customerName = parts[1];
-    }
-
-    final res = await db.awardStampToCustomer(
-      merchantId: widget.merchantId,
-      customerId: customerId,
-      customerName: customerName,
-      programId: _selectedProgramId!,
-      count: 1,
+    final targetProgram = merchantProgs.firstWhere(
+      (p) => p.id == programId,
+      orElse: () => merchantProgs.first,
     );
 
-    if (mounted) {
-      setState(() => _isProcessing = false);
-      final isCompleted = res['isCompleted'] == true;
-      _showResultDialog(
-        isSuccess: res['success'] ?? false,
-        title: isCompleted ? 'Reward Milestone Reached! 🎉' : 'Stamp Awarded! ☕',
-        message: res['message'] ?? '',
-        icon: isCompleted ? Icons.celebration_rounded : Icons.add_task_rounded,
-        accentColor: isCompleted ? AppColors.accentAmber : AppColors.primaryLight,
-        extraInfo: isCompleted
-            ? 'Customer has collected all required stamps and can now claim their reward!'
-            : null,
-      );
+    // Parse potential QR payload: "cust-alex|Alex Morgan" or "cust-alex" or phone
+    String customerId = query;
+    String customerName = 'Alex Morgan';
+    String customerPhone = query;
+
+    if (query.contains('|')) {
+      final parts = query.split('|');
+      customerId = parts[0];
+      if (parts.length > 1) customerName = parts[1];
+      if (parts.length > 2) customerPhone = parts[2];
     }
+
+    // Try finding in database
+    final existingMember = db.findMemberByPhoneOrIdentifier(
+      query: customerId.isNotEmpty ? customerId : query,
+      programId: programId,
+    );
+
+    int currentStamps = 0;
+    if (existingMember != null) {
+      customerId = existingMember.customerId;
+      customerName = existingMember.customerName;
+      customerPhone = existingMember.customerPhone;
+      currentStamps = existingMember.stampsCollected;
+    } else {
+      // Clean phone or ID
+      if (customerId.startsWith('cust-')) {
+        customerName = customerId.replaceAll('cust-', '').toUpperCase();
+      } else {
+        customerName = 'Member ($customerPhone)';
+      }
+    }
+
+    setState(() => _isProcessing = false);
+
+    _showCustomerAwardBottomSheet(
+      customerId: customerId,
+      customerName: customerName,
+      customerPhone: customerPhone,
+      currentStamps: currentStamps,
+      targetProgram: targetProgram,
+    );
   }
 
-  void _showResultDialog({
-    required bool isSuccess,
-    required String title,
-    required String message,
-    required IconData icon,
-    required Color accentColor,
-    String? extraInfo,
+  void _showCustomerAwardBottomSheet({
+    required String customerId,
+    required String customerName,
+    required String customerPhone,
+    required int currentStamps,
+    required LoyaltyProgram targetProgram,
   }) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceCard,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: BorderSide(color: accentColor.withValues(alpha: 0.5)),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: accentColor.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: accentColor, size: 48),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-                height: 1.4,
-              ),
-            ),
-            if (extraInfo != null) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceLight,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  extraInfo,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 12, color: AppColors.primaryLight),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (bottomSheetCtx) {
+        int stampsToAdd = 1;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final newTotalStamps = (currentStamps + stampsToAdd).clamp(0, targetProgram.totalStamps);
+            final willReachReward = newTotalStamps >= targetProgram.totalStamps;
+
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              decoration: const BoxDecoration(
+                color: AppColors.surfaceCard,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+                border: Border(
+                  top: BorderSide(color: AppColors.primary, width: 2),
                 ),
               ),
-            ],
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(ctx),
-                style: ElevatedButton.styleFrom(backgroundColor: accentColor),
-                child: const Text('Continue Scanning'),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Handle bar
+                    Container(
+                      width: 44,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: AppColors.border,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+
+                    // Header: Customer Info Card
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              gradient: AppColors.primaryGradient,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Text(
+                                customerName.isNotEmpty ? customerName[0].toUpperCase() : 'M',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        customerName,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.accentEmerald.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Text(
+                                        'VERIFIED',
+                                        style: TextStyle(
+                                          color: AppColors.accentEmerald,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.phone_rounded, size: 12, color: AppColors.textMuted),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      customerPhone.isNotEmpty ? customerPhone : '+62 812-3456-7890',
+                                      style: const TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // Program Title & Current Stamp Progress
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'LOYALTY PROGRAM',
+                                      style: TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      targetProgram.title,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '$currentStamps / ${targetProgram.totalStamps} Stamps',
+                                  style: const TextStyle(
+                                    color: AppColors.primaryLight,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+
+                          // Visual stamp dots preview
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: List.generate(targetProgram.totalStamps, (index) {
+                              final isExisting = index < currentStamps;
+                              final isNewAward = index >= currentStamps && index < newTotalStamps;
+
+                              return Container(
+                                margin: const EdgeInsets.symmetric(horizontal: 3),
+                                width: 26,
+                                height: 26,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isExisting
+                                      ? AppColors.primary
+                                      : isNewAward
+                                          ? AppColors.accentEmerald
+                                          : AppColors.surfaceLight,
+                                  border: Border.all(
+                                    color: isNewAward
+                                        ? AppColors.accentEmerald
+                                        : isExisting
+                                            ? AppColors.primaryLight
+                                            : AppColors.border,
+                                    width: isNewAward ? 2 : 1,
+                                  ),
+                                ),
+                                child: Icon(
+                                  isExisting
+                                      ? Icons.check_rounded
+                                      : isNewAward
+                                          ? Icons.add_rounded
+                                          : Icons.circle_outlined,
+                                  color: isExisting || isNewAward ? Colors.white : AppColors.textMuted,
+                                  size: 14,
+                                ),
+                              );
+                            }),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Counter Section: How much stamp to give
+                    const Text(
+                      'How many stamps to award?',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Minus button
+                        InkWell(
+                          onTap: stampsToAdd > 1
+                              ? () => setSheetState(() => stampsToAdd--)
+                              : null,
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: stampsToAdd > 1 ? AppColors.surfaceLight : AppColors.surfaceCard,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: stampsToAdd > 1 ? AppColors.border : AppColors.border.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.remove_rounded,
+                              color: stampsToAdd > 1 ? Colors.white : AppColors.textMuted,
+                              size: 24,
+                            ),
+                          ),
+                        ),
+
+                        // Stamp Counter Display
+                        Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 20),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                AppColors.primary.withValues(alpha: 0.25),
+                                AppColors.accentEmerald.withValues(alpha: 0.25),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: AppColors.accentEmerald.withValues(alpha: 0.6)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.workspace_premium_rounded, color: AppColors.accentEmerald, size: 24),
+                              const SizedBox(width: 8),
+                              Text(
+                                '+$stampsToAdd',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Plus button
+                        InkWell(
+                          onTap: (currentStamps + stampsToAdd < targetProgram.totalStamps)
+                              ? () => setSheetState(() => stampsToAdd++)
+                              : null,
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: (currentStamps + stampsToAdd < targetProgram.totalStamps)
+                                  ? AppColors.surfaceLight
+                                  : AppColors.surfaceCard,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: (currentStamps + stampsToAdd < targetProgram.totalStamps)
+                                    ? AppColors.border
+                                    : AppColors.border.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.add_rounded,
+                              color: (currentStamps + stampsToAdd < targetProgram.totalStamps)
+                                  ? Colors.white
+                                  : AppColors.textMuted,
+                              size: 24,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 10),
+                    Text(
+                      willReachReward
+                          ? '🎉 Member will complete card and unlock reward!'
+                          : 'Resulting in $newTotalStamps / ${targetProgram.totalStamps} stamps',
+                      style: TextStyle(
+                        color: willReachReward ? AppColors.accentAmber : AppColors.textSecondary,
+                        fontSize: 12,
+                        fontWeight: willReachReward ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Confirm Action Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          final db = context.read<MockDatabaseService>();
+                          final messenger = ScaffoldMessenger.of(context);
+                          final navigator = Navigator.of(context);
+                          final count = stampsToAdd;
+
+                          await db.awardStampToCustomer(
+                            merchantId: widget.merchantId,
+                            customerId: customerId,
+                            customerName: customerName,
+                            customerPhone: customerPhone,
+                            programId: targetProgram.id,
+                            count: count,
+                          );
+
+                          if (bottomSheetCtx.mounted) {
+                            Navigator.pop(bottomSheetCtx); // Close bottomsheet
+                          }
+
+                          if (mounted) {
+                            navigator.pop(); // Close MerchantScanView & navigate to Home
+
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'Success add $count stamp${count > 1 ? 's' : ''} to member $customerName!',
+                                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                backgroundColor: AppColors.accentEmerald,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                duration: const Duration(seconds: 4),
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.check_rounded, size: 20),
+                        label: Text(
+                          'Confirm & Award +$stampsToAdd Stamp${stampsToAdd > 1 ? 's' : ''}',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.accentEmerald,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -197,7 +570,7 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         title: const Text(
-          'Scan Customer or Voucher QR',
+          'Scan Customer QR',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
         ),
         centerTitle: true,
@@ -205,17 +578,33 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
           icon: const Icon(Icons.close_rounded, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(
+              _isTorchOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+              color: _isTorchOn ? AppColors.accentAmber : Colors.white70,
+            ),
+            onPressed: () {
+              setState(() => _isTorchOn = !_isTorchOn);
+              _scannerController.toggleTorch();
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.cameraswitch_rounded, color: Colors.white70),
+            onPressed: () => _scannerController.switchCamera(),
+          ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // Target Program Selector
               if (merchantProgs.isNotEmpty) ...[
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   decoration: BoxDecoration(
                     color: AppColors.surfaceLight,
                     borderRadius: BorderRadius.circular(16),
@@ -235,7 +624,7 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
                             items: merchantProgs.map((p) {
                               return DropdownMenuItem(
                                 value: p.id,
-                                child: Text('Program: ${p.title} (${p.totalStamps} stamps)'),
+                                child: Text('Target: ${p.title} (${p.totalStamps} stamps)'),
                               );
                             }).toList(),
                             onChanged: (val) {
@@ -247,184 +636,220 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
               ],
 
-              // Scanner Viewport with Laser Animation
-              Container(
-                width: 270,
-                height: 270,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A).withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.5), width: 2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.2),
-                      blurRadius: 30,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: Stack(
-                  children: [
-                    // Corner targeting brackets
-                    ..._buildCornerMarkers(),
-
-                    // Animated scanning laser
-                    AnimatedBuilder(
-                      animation: _laserController,
-                      builder: (context, child) {
-                        return Positioned(
-                          top: 20 + (_laserController.value * 230),
-                          left: 15,
-                          right: 15,
-                          child: Container(
-                            height: 3,
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Colors.transparent, AppColors.accentCyan, AppColors.primaryLight, Colors.transparent],
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.accentCyan.withValues(alpha: 0.8),
-                                  blurRadius: 10,
-                                  spreadRadius: 2,
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.qr_code_scanner_rounded,
-                            size: 54,
-                            color: Colors.white.withValues(alpha: 0.4),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _isProcessing ? 'Processing...' : 'Align QR inside the frame',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.7),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+              // Live Camera Scanner Viewport with Overlay
+              Center(
+                child: Container(
+                  width: 280,
+                  height: 280,
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.6), width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                        blurRadius: 28,
+                        spreadRadius: 2,
                       ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(26),
+                    child: Stack(
+                      children: [
+                        // Live Camera feed
+                        MobileScanner(
+                          controller: _scannerController,
+                          onDetect: (capture) {
+                            final List<Barcode> barcodes = capture.barcodes;
+                            for (final barcode in barcodes) {
+                              final String? val = barcode.rawValue;
+                              if (val != null && val.isNotEmpty) {
+                                _onQrDetected(val);
+                                break;
+                              }
+                            }
+                          },
+                          errorBuilder: (context, error) {
+                            return Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.videocam_off_rounded, color: Colors.white54, size: 44),
+                                    const SizedBox(height: 10),
+                                    const Text(
+                                      'Camera stream inactive or denied',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    const Text(
+                                      'You can use the phone number input below',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+
+                        // Corner targeting markers
+                        ..._buildCornerMarkers(),
+
+                        // Animated scanning laser
+                        AnimatedBuilder(
+                          animation: _laserController,
+                          builder: (context, child) {
+                            return Positioned(
+                              top: 20 + (_laserController.value * 230),
+                              left: 15,
+                              right: 15,
+                              child: Container(
+                                height: 3,
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Colors.transparent,
+                                      AppColors.accentCyan,
+                                      AppColors.primaryLight,
+                                      Colors.transparent,
+                                    ],
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.accentCyan.withValues(alpha: 0.8),
+                                      blurRadius: 10,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+
+                        // Bottom scanner hint
+                        Positioned(
+                          bottom: 12,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.6),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                _isProcessing ? 'Processing QR...' : 'Point camera at customer QR',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
 
               const SizedBox(height: 24),
 
-              // Simulation & Manual Input Header
-              const Text(
-                'Instant Web Scanner Simulation',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Test customer QR scan or voucher code redemption directly:',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-              ),
-              const SizedBox(height: 14),
-
-              // Quick Simulation Buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _isProcessing
-                          ? null
-                          : () => _processScannedData('cust-alex|Alex Morgan'),
-                      icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
-                      label: const Text('Scan Alex Morgan (Give +1 Stamp)', style: TextStyle(fontSize: 11)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _isProcessing
-                          ? null
-                          : () => _processScannedData('SERBUIN-LATTE-8821'),
-                      icon: const Icon(Icons.confirmation_num_rounded, size: 16),
-                      label: const Text('Redeem Free Latte Voucher', style: TextStyle(fontSize: 11)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.accentEmerald,
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 18),
-
-              // Manual Code Input
+              // Manual Phone Number Input Section
               Container(
-                padding: const EdgeInsets.all(14),
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceCard,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: AppColors.border),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _manualCodeController,
-                        style: const TextStyle(fontSize: 13, color: Colors.white),
-                        decoration: const InputDecoration(
-                          hintText: 'Enter code (e.g. SERBUIN-LATTE-8821)',
-                          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          filled: false,
+                    Row(
+                      children: const [
+                        Icon(Icons.dialpad_rounded, size: 16, color: AppColors.primaryLight),
+                        SizedBox(width: 8),
+                        Text(
+                          'Or Award Stamps by Phone Number',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: _isProcessing
-                          ? null
-                          : () {
-                              final text = _manualCodeController.text.trim();
-                              if (text.isNotEmpty) _processScannedData(text);
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.surfaceLight,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text('Submit', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Enter customer phone number to look up their stamp count:',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Phone Number Input and Submit
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceLight,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: TextField(
+                              controller: _phoneController,
+                              keyboardType: TextInputType.phone,
+                              style: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w600),
+                              decoration: const InputDecoration(
+                                hintText: 'Enter phone number (e.g. 081234567890)',
+                                hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                                contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                filled: false,
+                                prefixIcon: Icon(Icons.phone_rounded, color: AppColors.textMuted, size: 18),
+                              ),
+                              onSubmitted: (_) => _handlePhoneSubmit(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        SizedBox(
+                          height: 48,
+                          child: ElevatedButton(
+                            onPressed: _isProcessing ? null : _handlePhoneSubmit,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              padding: const EdgeInsets.symmetric(horizontal: 18),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                            child: const Text(
+                              'Submit',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
+
+              const SizedBox(height: 20),
             ],
           ),
         ),

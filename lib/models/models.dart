@@ -308,6 +308,7 @@ class MemberRecord {
   final String customerId;
   final String customerName;
   final String customerEmail;
+  final String customerPhone;
   final int stampsCollected;
   final int totalStampsRequired;
   final String status; // 'active', 'completed', 'expired'
@@ -326,6 +327,7 @@ class MemberRecord {
     required this.customerId,
     required this.customerName,
     required this.customerEmail,
+    this.customerPhone = '+62 812-3456-7890',
     required this.stampsCollected,
     required this.totalStampsRequired,
     required this.status,
@@ -345,6 +347,7 @@ class MemberRecord {
     String? customerId,
     String? customerName,
     String? customerEmail,
+    String? customerPhone,
     int? stampsCollected,
     int? totalStampsRequired,
     String? status,
@@ -363,6 +366,7 @@ class MemberRecord {
       customerId: customerId ?? this.customerId,
       customerName: customerName ?? this.customerName,
       customerEmail: customerEmail ?? this.customerEmail,
+      customerPhone: customerPhone ?? this.customerPhone,
       stampsCollected: stampsCollected ?? this.stampsCollected,
       totalStampsRequired: totalStampsRequired ?? this.totalStampsRequired,
       status: status ?? this.status,
@@ -384,6 +388,7 @@ class MemberRecord {
       'customerId': customerId,
       'customerName': customerName,
       'customerEmail': customerEmail,
+      'customerPhone': customerPhone,
       'stampsCollected': stampsCollected,
       'totalStampsRequired': totalStampsRequired,
       'status': status,
@@ -405,6 +410,7 @@ class MemberRecord {
       customerId: map['customerId'] ?? '',
       customerName: map['customerName'] ?? '',
       customerEmail: map['customerEmail'] ?? '',
+      customerPhone: map['customerPhone'] ?? '+62 812-3456-7890',
       stampsCollected: map['stampsCollected'] ?? 0,
       totalStampsRequired: map['totalStampsRequired'] ?? 6,
       status: map['status'] ?? 'active',
