@@ -55,7 +55,7 @@ class CustomerVouchersView extends StatelessWidget {
                 child: const Row(
                   children: [
                     Icon(Icons.timer_outlined, color: AppColors.primaryLight, size: 20),
-                    const SizedBox(width: 12),
+                    SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         'Tap any active voucher to open its dynamic QR code with a secure 2-minute auto-refresh timer.',

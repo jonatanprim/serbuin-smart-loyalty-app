@@ -254,7 +254,7 @@ class _RegisterViewState extends State<RegisterView> {
                 child: const Row(
                   children: [
                     Icon(Icons.info_outline_rounded, size: 16, color: AppColors.primaryLight),
-                    const SizedBox(width: 10),
+                    SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         'Full addresses, phone numbers, and preferences can be completed after registration.',

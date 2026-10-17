@@ -252,7 +252,7 @@ class _MerchantProgramDetailViewState extends State<MerchantProgramDetailView> {
                     ),
                     Switch(
                       value: _isActive,
-                      activeColor: AppColors.accentEmerald,
+                      activeThumbColor: AppColors.accentEmerald,
                       onChanged: (val) => setState(() => _isActive = val),
                     ),
                   ],

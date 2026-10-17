@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
-import '../../services/gemini_ai_service.dart';
 import '../../services/mock_database_service.dart';
 import '../../theme/app_theme.dart';
 
@@ -83,7 +82,9 @@ class _MerchantMembersViewState extends State<MerchantMembersView> {
                         style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
                       ),
                       Text(
-                        '${filteredMembers.length} members enrolled',
+                        _lastScanTimestamp != null
+                            ? '${filteredMembers.length} members • AI scanned $_lastScanTimestamp'
+                            : '${filteredMembers.length} members enrolled',
                         style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                       ),
                     ],

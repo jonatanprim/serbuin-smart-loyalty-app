@@ -95,12 +95,14 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
       _isGenerating = false;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('✨ Gemini AI template generated! You can customize before publishing.'),
-        backgroundColor: AppColors.accentPurple,
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✨ Gemini AI template generated! You can customize before publishing.'),
+          backgroundColor: AppColors.accentPurple,
+        ),
+      );
+    }
   }
 
   Future<void> _publishProgram() async {
@@ -237,7 +239,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
                     const Row(
                       children: [
                         Icon(Icons.auto_awesome_rounded, color: AppColors.primaryLight, size: 20),
-                        const SizedBox(width: 8),
+                        SizedBox(width: 8),
                         Text(
                           'Generate with Gemini AI',
                           style: TextStyle(

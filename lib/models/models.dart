@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 enum UserRole { customer, merchant }
 
 class AppUser {
