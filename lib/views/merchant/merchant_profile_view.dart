@@ -32,10 +32,10 @@ class _MerchantProfileViewState extends State<MerchantProfileView> {
     final p = widget.user.merchantProfile;
     _businessNameController = TextEditingController(text: p?.businessName ?? widget.user.name);
     _categoryController = TextEditingController(text: p?.category ?? 'Cafe & Bakery');
-    _addressController = TextEditingController(text: p?.address ?? 'Jl. Senopati No. 42, Jakarta');
-    _phoneController = TextEditingController(text: p?.phone ?? widget.user.phone ?? '+62 811-9876-5432');
-    _hoursController = TextEditingController(text: p?.operatingHours ?? '07:00 AM - 10:00 PM Daily');
-    _descController = TextEditingController(text: p?.description ?? 'Artisan specialty coffee & cozy aesthetic.');
+    _addressController = TextEditingController(text: p?.address ?? '');
+    _phoneController = TextEditingController(text: p?.phone ?? widget.user.phone ?? '');
+    _hoursController = TextEditingController(text: p?.operatingHours ?? '');
+    _descController = TextEditingController(text: p?.description ?? '');
   }
 
   @override
@@ -171,27 +171,27 @@ class _MerchantProfileViewState extends State<MerchantProfileView> {
 
               const Text('Category', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
               const SizedBox(height: 6),
-              TextField(controller: _categoryController, decoration: const InputDecoration()),
+              TextField(controller: _categoryController, decoration: const InputDecoration(hintText: 'e.g. Cafe & Bakery, Retail, Barbershop')),
               const SizedBox(height: 12),
 
               const Text('Physical Store Address', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
               const SizedBox(height: 6),
-              TextField(controller: _addressController, decoration: const InputDecoration()),
+              TextField(controller: _addressController, decoration: const InputDecoration(hintText: 'e.g. Jl. Senopati No. 42, Jakarta Selatan')),
               const SizedBox(height: 12),
 
               const Text('Business Phone / WhatsApp', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
               const SizedBox(height: 6),
-              TextField(controller: _phoneController, decoration: const InputDecoration()),
+              TextField(controller: _phoneController, keyboardType: TextInputType.phone, decoration: const InputDecoration(hintText: 'e.g. 081234567890')),
               const SizedBox(height: 12),
 
               const Text('Operating Hours', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
               const SizedBox(height: 6),
-              TextField(controller: _hoursController, decoration: const InputDecoration()),
+              TextField(controller: _hoursController, decoration: const InputDecoration(hintText: 'e.g. 08:00 AM - 10:00 PM Daily')),
               const SizedBox(height: 12),
 
               const Text('Store Bio & Description', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
               const SizedBox(height: 6),
-              TextField(controller: _descController, maxLines: 2, decoration: const InputDecoration()),
+              TextField(controller: _descController, maxLines: 2, decoration: const InputDecoration(hintText: 'Share a brief description of your store & specialty')),
               const SizedBox(height: 18),
 
               SizedBox(

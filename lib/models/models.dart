@@ -1,3 +1,32 @@
+DateTime parseDateTimeSafe(dynamic val, [DateTime? fallback]) {
+  if (val == null) return fallback ?? DateTime.now();
+  if (val is DateTime) return val;
+  if (val is String) {
+    final parsed = DateTime.tryParse(val);
+    if (parsed != null) return parsed;
+  }
+  try {
+    final dynamic dyn = val;
+    final toDate = dyn.toDate;
+    if (toDate is Function) {
+      final res = toDate();
+      if (res is DateTime) return res;
+    }
+  } catch (_) {}
+  return fallback ?? DateTime.now();
+}
+
+String normalizePhoneNumber(String? phone) {
+  if (phone == null) return '';
+  var digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.startsWith('62')) {
+    digits = digits.substring(2);
+  } else if (digits.startsWith('0')) {
+    digits = digits.substring(1);
+  }
+  return digits;
+}
+
 enum UserRole { customer, merchant }
 
 class AppUser {
@@ -75,9 +104,7 @@ class AppUser {
       phone: map['phone'],
       avatarUrl: map['avatarUrl'],
       isProfileComplete: map['isProfileComplete'] ?? false,
-      createdAt: map['createdAt'] != null
-          ? DateTime.parse(map['createdAt'])
-          : DateTime.now(),
+      createdAt: parseDateTimeSafe(map['createdAt']),
       merchantProfile: map['merchantProfile'] != null
           ? MerchantProfile.fromMap(map['merchantProfile'])
           : null,
@@ -292,9 +319,7 @@ class LoyaltyProgram {
       gradientColors: List<String>.from(map['gradientColors'] ?? ['#6366F1', '#9333EA']),
       iconName: map['iconName'] ?? 'coffee',
       isActive: map['isActive'] ?? true,
-      createdAt: map['createdAt'] != null
-          ? DateTime.parse(map['createdAt'])
-          : DateTime.now(),
+      createdAt: parseDateTimeSafe(map['createdAt']),
       memberCount: map['memberCount'] ?? 0,
     );
   }
@@ -327,7 +352,7 @@ class MemberRecord {
     required this.customerId,
     required this.customerName,
     required this.customerEmail,
-    this.customerPhone = '+62 812-3456-7890',
+    this.customerPhone = '',
     required this.stampsCollected,
     required this.totalStampsRequired,
     required this.status,
@@ -410,16 +435,12 @@ class MemberRecord {
       customerId: map['customerId'] ?? '',
       customerName: map['customerName'] ?? '',
       customerEmail: map['customerEmail'] ?? '',
-      customerPhone: map['customerPhone'] ?? '+62 812-3456-7890',
+      customerPhone: map['customerPhone'] ?? '',
       stampsCollected: map['stampsCollected'] ?? 0,
       totalStampsRequired: map['totalStampsRequired'] ?? 6,
       status: map['status'] ?? 'active',
-      lastStampDate: map['lastStampDate'] != null
-          ? DateTime.parse(map['lastStampDate'])
-          : DateTime.now(),
-      joinedDate: map['joinedDate'] != null
-          ? DateTime.parse(map['joinedDate'])
-          : DateTime.now(),
+      lastStampDate: parseDateTimeSafe(map['lastStampDate']),
+      joinedDate: parseDateTimeSafe(map['joinedDate']),
       riskLevel: map['riskLevel'] ?? 'low',
       riskReason: map['riskReason'] ?? '',
       recommendedVoucher: map['recommendedVoucher'] ?? '',
@@ -526,15 +547,11 @@ class Voucher {
       description: map['description'] ?? '',
       discountType: map['discountType'] ?? 'free_item',
       discountValue: map['discountValue'] ?? 'Free Item',
-      claimedAt: map['claimedAt'] != null
-          ? DateTime.parse(map['claimedAt'])
-          : DateTime.now(),
-      expiresAt: map['expiresAt'] != null
-          ? DateTime.parse(map['expiresAt'])
-          : DateTime.now().add(const Duration(days: 30)),
+      claimedAt: parseDateTimeSafe(map['claimedAt']),
+      expiresAt: parseDateTimeSafe(map['expiresAt'], DateTime.now().add(const Duration(days: 30))),
       isRedeemed: map['isRedeemed'] ?? false,
       redeemedAt: map['redeemedAt'] != null
-          ? DateTime.parse(map['redeemedAt'])
+          ? parseDateTimeSafe(map['redeemedAt'])
           : null,
     );
   }
@@ -582,9 +599,7 @@ class ActivityLog {
       title: map['title'] ?? '',
       subtitle: map['subtitle'] ?? '',
       merchantName: map['merchantName'] ?? '',
-      timestamp: map['timestamp'] != null
-          ? DateTime.parse(map['timestamp'])
-          : DateTime.now(),
+      timestamp: parseDateTimeSafe(map['timestamp']),
       stampsCount: map['stampsCount'],
     );
   }

@@ -57,7 +57,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
   @override
   void initState() {
     super.initState();
-    _aiPromptController.text = 'Artisan cafe buy 5 specialty coffee get 6th drink free';
+    _aiPromptController.text = '';
   }
 
   @override

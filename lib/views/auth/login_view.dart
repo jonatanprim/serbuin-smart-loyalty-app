@@ -164,7 +164,7 @@ class _LoginViewState extends State<LoginView> {
                 keyboardType: TextInputType.emailAddress,
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.alternate_email_rounded, size: 20, color: AppColors.textMuted),
-                  hintText: 'e.g. alex@serbuin.com',
+                  hintText: 'e.g. user@serbuin.com',
                 ),
               ),
               const SizedBox(height: 18),

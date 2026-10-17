@@ -35,10 +35,12 @@ class _CustomerProfileViewState extends State<CustomerProfileView> {
     super.initState();
     final p = widget.user.customerProfile;
     _nameController = TextEditingController(text: widget.user.name);
-    _phoneController = TextEditingController(text: p?.phone ?? widget.user.phone ?? '+62 812-3456-7890');
-    _birthDateController = TextEditingController(text: p?.birthDate ?? '1998-05-14');
-    _bioController = TextEditingController(text: p?.bio ?? 'Coffee connoisseur and weekend brunch seeker.');
-    _favoriteCategory = p?.favoriteCategory ?? 'Cafe & Bakery';
+    _phoneController = TextEditingController(text: p?.phone ?? widget.user.phone ?? '');
+    _birthDateController = TextEditingController(text: p?.birthDate ?? '');
+    _bioController = TextEditingController(text: p?.bio ?? '');
+    _favoriteCategory = (p?.favoriteCategory != null && p!.favoriteCategory.isNotEmpty)
+        ? p.favoriteCategory
+        : 'Cafe & Bakery';
   }
 
   @override
@@ -151,17 +153,17 @@ class _CustomerProfileViewState extends State<CustomerProfileView> {
 
               const Text('Full Name', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
               const SizedBox(height: 6),
-              TextField(controller: _nameController, decoration: const InputDecoration()),
+              TextField(controller: _nameController, decoration: const InputDecoration(hintText: 'Enter your full name')),
               const SizedBox(height: 12),
 
               const Text('Phone Number', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
               const SizedBox(height: 6),
-              TextField(controller: _phoneController, decoration: const InputDecoration()),
+              TextField(controller: _phoneController, keyboardType: TextInputType.phone, decoration: const InputDecoration(hintText: 'e.g. 081234567890')),
               const SizedBox(height: 12),
 
               const Text('Date of Birth (For Birthday Perks)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
               const SizedBox(height: 6),
-              TextField(controller: _birthDateController, decoration: const InputDecoration()),
+              TextField(controller: _birthDateController, decoration: const InputDecoration(hintText: 'e.g. 1998-05-14')),
               const SizedBox(height: 12),
 
               const Text('Favorite Category', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
@@ -189,7 +191,7 @@ class _CustomerProfileViewState extends State<CustomerProfileView> {
 
               const Text('Bio / Preferences', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
               const SizedBox(height: 6),
-              TextField(controller: _bioController, maxLines: 2, decoration: const InputDecoration()),
+              TextField(controller: _bioController, maxLines: 2, decoration: const InputDecoration(hintText: 'Share a bit about yourself')),
               const SizedBox(height: 18),
 
               SizedBox(

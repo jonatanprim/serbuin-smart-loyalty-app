@@ -77,9 +77,9 @@ class _MerchantScanViewState extends State<MerchantScanView> {
       orElse: () => merchantProgs.first,
     );
 
-    // Parse potential QR payload: "cust-alex|Alex Morgan|phone" or "cust-alex" or phone
+    // Parse potential QR payload: "cust-id|Customer Name|phone" or "cust-id" or phone
     String customerId = query;
-    String customerName = 'Loyalty Member';
+    String customerName = 'Member';
     String customerPhone = query;
 
     if (query.contains('|')) {
@@ -103,7 +103,7 @@ class _MerchantScanViewState extends State<MerchantScanView> {
       currentStamps = existingMember.stampsCollected;
     } else {
       // 2. Try looking up in registered user accounts
-      final regUser = await db.findRegisteredCustomerByPhone(customerPhone.isNotEmpty ? customerPhone : query);
+      final regUser = await db.findRegisteredCustomer(customerPhone.isNotEmpty ? customerPhone : (customerId.isNotEmpty ? customerId : query));
       if (regUser != null) {
         customerId = regUser['id']!;
         customerName = regUser['name']!;
@@ -114,7 +114,7 @@ class _MerchantScanViewState extends State<MerchantScanView> {
         final cleanId = customerId.replaceAll('cust-', '');
         customerName = cleanId.isNotEmpty ? cleanId[0].toUpperCase() + cleanId.substring(1) : 'Customer';
       } else {
-        customerName = 'Customer Member';
+        customerName = 'Member';
       }
     }
 
@@ -791,6 +791,23 @@ class _InputManualBottomSheet extends StatefulWidget {
 class _InputManualBottomSheetState extends State<_InputManualBottomSheet> {
   final _phoneController = TextEditingController();
   final _nameController = TextEditingController();
+  List<Map<String, String>> _registeredCustomers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCustomers();
+  }
+
+  Future<void> _loadCustomers() async {
+    final db = context.read<MockDatabaseService>();
+    final customers = await db.getAllRegisteredCustomers();
+    if (mounted) {
+      setState(() {
+        _registeredCustomers = customers;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -804,6 +821,13 @@ class _InputManualBottomSheetState extends State<_InputManualBottomSheet> {
     final name = _nameController.text.trim();
     if (phone.isEmpty) return;
     Navigator.of(context).pop({'phone': phone, 'name': name});
+  }
+
+  void _selectCustomer(Map<String, String> cust) {
+    Navigator.of(context).pop({
+      'phone': cust['phone']?.isNotEmpty == true ? cust['phone']! : cust['id']!,
+      'name': cust['name'] ?? '',
+    });
   }
 
   @override
@@ -870,11 +894,49 @@ class _InputManualBottomSheetState extends State<_InputManualBottomSheet> {
             textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(
               labelText: 'Customer Name (Optional)',
-              hintText: 'e.g. Alex Morgan, Budi Santoso',
+              hintText: 'e.g. Budi Santoso, Siti Rahma',
               prefixIcon: Icon(Icons.person_outline_rounded, color: AppColors.primaryLight, size: 20),
             ),
             onSubmitted: (_) => _submit(),
           ),
+
+          // Registered Customers Quick Select (if available)
+          if (_registeredCustomers.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text(
+              'OR TAP REGISTERED CUSTOMER:',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textMuted,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _registeredCustomers.map((cust) {
+                  final name = cust['name'] ?? 'Customer';
+                  final phone = cust['phone'] ?? '';
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ActionChip(
+                      avatar: const Icon(Icons.person_rounded, size: 16, color: AppColors.primaryLight),
+                      label: Text(
+                        phone.isNotEmpty ? '$name ($phone)' : name,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
+                      ),
+                      backgroundColor: AppColors.surfaceLight,
+                      side: const BorderSide(color: AppColors.border),
+                      onPressed: () => _selectCustomer(cust),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,

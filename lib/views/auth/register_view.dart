@@ -18,6 +18,7 @@ class RegisterView extends StatefulWidget {
 
 class _RegisterViewState extends State<RegisterView> {
   final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   late UserRole _selectedRole;
@@ -32,6 +33,7 @@ class _RegisterViewState extends State<RegisterView> {
   @override
   void dispose() {
     _nameController.dispose();
+    _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -39,13 +41,14 @@ class _RegisterViewState extends State<RegisterView> {
 
   Future<void> _handleRegister() async {
     final name = _nameController.text.trim();
+    final phone = _phoneController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    if (name.isEmpty || email.isEmpty || password.isEmpty) {
+    if (name.isEmpty || email.isEmpty || password.isEmpty || phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please fill in your name, email, and password.'),
+          content: Text('Please fill in your name, phone number, email, and password.'),
           backgroundColor: AppColors.accentRose,
         ),
       );
@@ -56,6 +59,7 @@ class _RegisterViewState extends State<RegisterView> {
       final auth = context.read<AuthProvider>();
       final success = await auth.register(
         name: name,
+        phone: phone,
         email: email,
         password: password,
         role: _selectedRole,
@@ -227,7 +231,23 @@ class _RegisterViewState extends State<RegisterView> {
                     size: 20,
                     color: AppColors.textMuted,
                   ),
-                  hintText: _selectedRole == UserRole.merchant ? 'e.g. Kopi Kenangan Artisan' : 'e.g. Alex Morgan',
+                  hintText: _selectedRole == UserRole.merchant ? 'e.g. Kedai Kopi Makmur' : 'e.g. Budi Santoso',
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              // Phone Number Field (Used for instant stamp awarding)
+              const Text(
+                'Phone Number (WhatsApp)',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.phone_android_rounded, size: 20, color: AppColors.textMuted),
+                  hintText: 'e.g. 081234567890',
                 ),
               ),
               const SizedBox(height: 18),

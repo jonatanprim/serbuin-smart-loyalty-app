@@ -36,15 +36,27 @@ class MockDatabaseService extends ChangeNotifier {
     if (_isInitialized) return;
     final prefs = await SharedPreferences.getInstance();
 
-    // 1. Purge any old legacy dummy / seed data from local storage
-    final programsJson = prefs.getString('serbuin_programs');
-    if (programsJson != null && programsJson.contains('prog-kopi-1')) {
+    // 1. Purge ANY old legacy dummy / seed data from local storage
+    bool purgeLegacy(String? str) {
+      if (str == null) return false;
+      return str.contains('prog-kopi-1') ||
+          str.contains('Alex Morgan') ||
+          str.contains('cust-alex') ||
+          str.contains('mem-1') ||
+          str.contains('+62 812-3456-7890');
+    }
+
+    if (purgeLegacy(prefs.getString('serbuin_programs')) ||
+        purgeLegacy(prefs.getString('serbuin_members')) ||
+        purgeLegacy(prefs.getString('serbuin_vouchers')) ||
+        purgeLegacy(prefs.getString('serbuin_activities'))) {
       await prefs.remove('serbuin_programs');
       await prefs.remove('serbuin_members');
       await prefs.remove('serbuin_vouchers');
       await prefs.remove('serbuin_activities');
     } else {
       // Load offline cache if present
+      final programsJson = prefs.getString('serbuin_programs');
       final membersJson = prefs.getString('serbuin_members');
       final vouchersJson = prefs.getString('serbuin_vouchers');
       final activitiesJson = prefs.getString('serbuin_activities');
@@ -92,28 +104,68 @@ class MockDatabaseService extends ChangeNotifier {
 
       _programsSub?.cancel();
       _programsSub = firestore.collection('programs').snapshots().listen((snap) {
-        _programs = snap.docs.map((doc) => LoyaltyProgram.fromMap(doc.data())).toList();
+        final list = <LoyaltyProgram>[];
+        for (final doc in snap.docs) {
+          try {
+            final data = Map<String, dynamic>.from(doc.data());
+            data['id'] = data['id'] ?? doc.id;
+            list.add(LoyaltyProgram.fromMap(data));
+          } catch (e) {
+            debugPrint('Error parsing program ${doc.id}: $e');
+          }
+        }
+        _programs = list;
         _saveToStorage();
         notifyListeners();
       }, onError: (e) => debugPrint('Live programs error: $e'));
 
       _membersSub?.cancel();
       _membersSub = firestore.collection('members').snapshots().listen((snap) {
-        _members = snap.docs.map((doc) => MemberRecord.fromMap(doc.data())).toList();
+        final list = <MemberRecord>[];
+        for (final doc in snap.docs) {
+          try {
+            final data = Map<String, dynamic>.from(doc.data());
+            data['id'] = data['id'] ?? doc.id;
+            list.add(MemberRecord.fromMap(data));
+          } catch (e) {
+            debugPrint('Error parsing member ${doc.id}: $e');
+          }
+        }
+        _members = list;
         _saveToStorage();
         notifyListeners();
       }, onError: (e) => debugPrint('Live members error: $e'));
 
       _vouchersSub?.cancel();
       _vouchersSub = firestore.collection('vouchers').snapshots().listen((snap) {
-        _vouchers = snap.docs.map((doc) => Voucher.fromMap(doc.data())).toList();
+        final list = <Voucher>[];
+        for (final doc in snap.docs) {
+          try {
+            final data = Map<String, dynamic>.from(doc.data());
+            data['id'] = data['id'] ?? doc.id;
+            list.add(Voucher.fromMap(data));
+          } catch (e) {
+            debugPrint('Error parsing voucher ${doc.id}: $e');
+          }
+        }
+        _vouchers = list;
         _saveToStorage();
         notifyListeners();
       }, onError: (e) => debugPrint('Live vouchers error: $e'));
 
       _activitiesSub?.cancel();
       _activitiesSub = firestore.collection('activities').snapshots().listen((snap) {
-        _activities = snap.docs.map((doc) => ActivityLog.fromMap(doc.data())).toList();
+        final list = <ActivityLog>[];
+        for (final doc in snap.docs) {
+          try {
+            final data = Map<String, dynamic>.from(doc.data());
+            data['id'] = data['id'] ?? doc.id;
+            list.add(ActivityLog.fromMap(data));
+          } catch (e) {
+            debugPrint('Error parsing activity ${doc.id}: $e');
+          }
+        }
+        _activities = list;
         _saveToStorage();
         notifyListeners();
       }, onError: (e) => debugPrint('Live activities error: $e'));
@@ -208,9 +260,9 @@ class MockDatabaseService extends ChangeNotifier {
 
       try {
         await FirebaseFirestore.instance
-            .collection('programs')
-            .doc(updatedProgram.id)
-            .set(updatedProgram.toMap(), SetOptions(merge: true));
+          .collection('programs')
+          .doc(updatedProgram.id)
+          .set(updatedProgram.toMap(), SetOptions(merge: true));
       } catch (e) {
         debugPrint('Firestore updateProgram error: $e');
       }
@@ -219,10 +271,9 @@ class MockDatabaseService extends ChangeNotifier {
 
   /// Delete program (Allowed only if memberCount == 0)
   Future<bool> deleteProgram(String programId) async {
-    final prog = _programs.firstWhere((p) => p.id == programId, orElse: () => throw Exception('Not found'));
-    final membersInProg = _members.where((m) => m.programId == programId).length;
-    if (membersInProg > 0 || prog.memberCount > 0) {
-      return false; // Can't delete if members exist
+    final prog = _programs.firstWhere((p) => p.id == programId, orElse: () => _programs.first);
+    if (prog.memberCount > 0) {
+      return false; // Cannot delete program with enrolled members
     }
 
     _programs.removeWhere((p) => p.id == programId);
@@ -237,6 +288,26 @@ class MockDatabaseService extends ChangeNotifier {
     return true;
   }
 
+  /// Archive/Deactivate program
+  Future<void> archiveProgram(String programId) async {
+    final index = _programs.indexWhere((p) => p.id == programId);
+    if (index != -1) {
+      final updated = _programs[index].copyWith(isActive: false);
+      _programs[index] = updated;
+      await _saveToStorage();
+      notifyListeners();
+
+      try {
+        await FirebaseFirestore.instance
+          .collection('programs')
+          .doc(programId)
+          .update({'isActive': false});
+      } catch (e) {
+        debugPrint('Firestore archiveProgram error: $e');
+      }
+    }
+  }
+
   /// Find customer/member record by phone number, customer ID, or name
   MemberRecord? findMemberByPhoneOrIdentifier({
     required String query,
@@ -245,12 +316,12 @@ class MockDatabaseService extends ChangeNotifier {
     final cleanQuery = query.trim();
     if (cleanQuery.isEmpty) return null;
 
-    final cleanDigits = cleanQuery.replaceAll(RegExp(r'[^0-9]'), '');
+    final cleanDigits = normalizePhoneNumber(cleanQuery);
     final cleanAlpha = cleanQuery.toLowerCase();
 
     // 1. Search in the target program members
     for (final m in _members.where((m) => m.programId == programId)) {
-      final phoneDigits = m.customerPhone.replaceAll(RegExp(r'[^0-9]'), '');
+      final phoneDigits = normalizePhoneNumber(m.customerPhone);
       if (cleanDigits.length >= 6 && phoneDigits.isNotEmpty) {
         if (phoneDigits.endsWith(cleanDigits) || cleanDigits.endsWith(phoneDigits)) {
           return m;
@@ -265,7 +336,7 @@ class MockDatabaseService extends ChangeNotifier {
 
     // 2. Search across other programs (to reuse name, phone, customerId)
     for (final m in _members) {
-      final phoneDigits = m.customerPhone.replaceAll(RegExp(r'[^0-9]'), '');
+      final phoneDigits = normalizePhoneNumber(m.customerPhone);
       if (cleanDigits.length >= 6 && phoneDigits.isNotEmpty) {
         if (phoneDigits.endsWith(cleanDigits) || cleanDigits.endsWith(phoneDigits)) {
           final prog = _programs.firstWhere((p) => p.id == programId, orElse: () => _programs.first);
@@ -318,24 +389,33 @@ class MockDatabaseService extends ChangeNotifier {
     return null;
   }
 
-  /// Look up registered customer user account by phone number in shared Firestore users collection
-  Future<Map<String, String>?> findRegisteredCustomerByPhone(String phone) async {
-    final cleanDigits = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    if (cleanDigits.length < 6) return null;
+  /// Look up registered customer user account in shared Firestore users collection or loaded members
+  Future<Map<String, String>?> findRegisteredCustomer(String query) async {
+    final cleanQuery = query.trim();
+    if (cleanQuery.isEmpty) return null;
+    final cleanAlpha = cleanQuery.toLowerCase();
+    final cleanDigits = normalizePhoneNumber(cleanQuery);
 
     // 1. Query live Cloud Firestore users collection
     try {
       final snap = await FirebaseFirestore.instance.collection('users').get();
       for (final doc in snap.docs) {
         final data = doc.data();
-        final p = (data['phone'] ?? '').toString().replaceAll(RegExp(r'[^0-9]'), '');
-        if (p.isNotEmpty && (p.endsWith(cleanDigits) || cleanDigits.endsWith(p))) {
-          return {
-            'id': data['id']?.toString() ?? doc.id,
-            'name': data['name']?.toString() ?? '',
-            'phone': data['phone']?.toString() ?? phone,
-            'email': data['email']?.toString() ?? '',
-          };
+        final id = (data['id'] ?? doc.id).toString();
+        final name = (data['name'] ?? '').toString();
+        final phone = (data['phone'] ?? '').toString();
+        final email = (data['email'] ?? '').toString();
+        final pDigits = normalizePhoneNumber(phone);
+
+        if (cleanDigits.length >= 6 && pDigits.isNotEmpty) {
+          if (pDigits.endsWith(cleanDigits) || cleanDigits.endsWith(pDigits)) {
+            return {'id': id, 'name': name, 'phone': phone, 'email': email};
+          }
+        }
+        if (id.toLowerCase() == cleanAlpha ||
+            (email.isNotEmpty && email.toLowerCase() == cleanAlpha) ||
+            (name.isNotEmpty && name.toLowerCase() == cleanAlpha)) {
+          return {'id': id, 'name': name, 'phone': phone, 'email': email};
         }
       }
     } catch (e) {
@@ -344,8 +424,20 @@ class MockDatabaseService extends ChangeNotifier {
 
     // 2. Query loaded members
     for (final m in _members) {
-      final p = m.customerPhone.replaceAll(RegExp(r'[^0-9]'), '');
-      if (p.isNotEmpty && (p.endsWith(cleanDigits) || cleanDigits.endsWith(p))) {
+      final pDigits = normalizePhoneNumber(m.customerPhone);
+      if (cleanDigits.length >= 6 && pDigits.isNotEmpty) {
+        if (pDigits.endsWith(cleanDigits) || cleanDigits.endsWith(pDigits)) {
+          return {
+            'id': m.customerId,
+            'name': m.customerName,
+            'phone': m.customerPhone,
+            'email': m.customerEmail,
+          };
+        }
+      }
+      if (m.customerId.toLowerCase() == cleanAlpha ||
+          (m.customerEmail.isNotEmpty && m.customerEmail.toLowerCase() == cleanAlpha) ||
+          m.customerName.toLowerCase() == cleanAlpha) {
         return {
           'id': m.customerId,
           'name': m.customerName,
@@ -356,6 +448,32 @@ class MockDatabaseService extends ChangeNotifier {
     }
 
     return null;
+  }
+
+  /// Alias for backward compatibility
+  Future<Map<String, String>?> findRegisteredCustomerByPhone(String phone) =>
+      findRegisteredCustomer(phone);
+
+  /// Fetch all registered customers from Firestore
+  Future<List<Map<String, String>>> getAllRegisteredCustomers() async {
+    final list = <Map<String, String>>[];
+    try {
+      final snap = await FirebaseFirestore.instance.collection('users').get();
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        if (data['role'] == 'customer') {
+          list.add({
+            'id': (data['id'] ?? doc.id).toString(),
+            'name': (data['name'] ?? 'Customer').toString(),
+            'phone': (data['phone'] ?? '').toString(),
+            'email': (data['email'] ?? '').toString(),
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Get all registered customers note: $e');
+    }
+    return list;
   }
 
   /// Award stamp to a member by scanning QR or entering phone
@@ -373,10 +491,33 @@ class MockDatabaseService extends ChangeNotifier {
     }
     final program = _programs[progIndex];
 
-    // Find or create member record
-    final memberIndex = _members.indexWhere(
-      (m) => m.customerId == customerId && m.programId == programId,
-    );
+    final normInputPhone = normalizePhoneNumber(customerPhone?.isNotEmpty == true ? customerPhone : customerId);
+
+    // Look up if user is registered in Firestore
+    final regUser = await findRegisteredCustomer(customerId.isNotEmpty ? customerId : (customerPhone ?? ''));
+
+    final actualCustomerId = regUser?['id'] ?? (customerId.isNotEmpty ? customerId : (customerPhone ?? ''));
+    final actualCustomerName = (customerName != null && customerName.trim().isNotEmpty && customerName != 'Customer Member')
+        ? customerName.trim()
+        : (regUser?['name']?.isNotEmpty == true ? regUser!['name']! : 'Member');
+    final actualCustomerPhone = (customerPhone != null && customerPhone.trim().isNotEmpty)
+        ? customerPhone.trim()
+        : (regUser?['phone'] ?? '');
+    final actualCustomerEmail = regUser?['email'] ?? '';
+
+    // Find existing member record in this program
+    final memberIndex = _members.indexWhere((m) {
+      if (m.programId != programId) return false;
+      if (actualCustomerId.isNotEmpty && (m.customerId == actualCustomerId || m.customerId == customerId)) return true;
+      if (normInputPhone.length >= 6) {
+        final normMemberPhone = normalizePhoneNumber(m.customerPhone);
+        if (normMemberPhone.isNotEmpty &&
+            (normMemberPhone.endsWith(normInputPhone) || normInputPhone.endsWith(normMemberPhone))) {
+          return true;
+        }
+      }
+      return false;
+    });
 
     MemberRecord member;
     if (memberIndex != -1) {
@@ -385,13 +526,17 @@ class MockDatabaseService extends ChangeNotifier {
       final isCompleted = newStamps >= program.totalStamps;
 
       member = existing.copyWith(
+        customerId: actualCustomerId.isNotEmpty ? actualCustomerId : existing.customerId,
+        customerName: actualCustomerName.isNotEmpty && actualCustomerName != 'Member'
+            ? actualCustomerName
+            : existing.customerName,
+        customerPhone: actualCustomerPhone.isNotEmpty ? actualCustomerPhone : existing.customerPhone,
+        customerEmail: actualCustomerEmail.isNotEmpty ? actualCustomerEmail : existing.customerEmail,
         stampsCollected: newStamps,
         status: isCompleted ? 'completed' : 'active',
         lastStampDate: DateTime.now(),
         riskLevel: 'low',
-        riskReason: 'Recently active in store.',
-        customerPhone: customerPhone ?? existing.customerPhone,
-        customerName: customerName ?? existing.customerName,
+        riskReason: 'Active stamp earned.',
       );
       _members[memberIndex] = member;
     } else {
@@ -400,10 +545,10 @@ class MockDatabaseService extends ChangeNotifier {
         programId: programId,
         programTitle: program.title,
         merchantId: merchantId,
-        customerId: customerId,
-        customerName: customerName ?? 'Customer Member',
-        customerEmail: '$customerId@serbuin.com',
-        customerPhone: customerPhone ?? '+62 812-3456-7890',
+        customerId: actualCustomerId,
+        customerName: actualCustomerName,
+        customerEmail: actualCustomerEmail,
+        customerPhone: actualCustomerPhone,
         stampsCollected: count,
         totalStampsRequired: program.totalStamps,
         status: count >= program.totalStamps ? 'completed' : 'active',
@@ -421,7 +566,7 @@ class MockDatabaseService extends ChangeNotifier {
     // Add activity
     final newActivity = ActivityLog(
       id: _uuid.v4(),
-      userId: customerId,
+      userId: actualCustomerId,
       type: 'stamp_earned',
       title: 'Earned +$count Stamp${count > 1 ? 's' : ''}',
       subtitle: '${member.stampsCollected}/${member.totalStampsRequired} stamps on ${program.title}',
@@ -457,7 +602,7 @@ class MockDatabaseService extends ChangeNotifier {
 
     // Trigger Cloud Run FCM push notification
     CloudRunService().sendFcmNotification(
-      customerId: customerId,
+      customerId: actualCustomerId,
       title: member.stampsCollected >= program.totalStamps ? '🎉 Reward Unlocked!' : '☕ +$count Stamp Earned!',
       body: '${member.stampsCollected}/${program.totalStamps} stamps collected on ${program.title}',
     );

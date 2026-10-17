@@ -63,19 +63,22 @@ class _CustomerHomeViewState extends State<CustomerHomeView> {
         .toList();
     final voucherCount = customerVouchers.length;
 
-    // Member records for this customer (matched by customerId, phone, or email)
-    final cleanUserPhone = widget.user.phone?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
+    // Member records for this customer (matched by customerId, phone, email, or name)
+    final cleanUserPhone = normalizePhoneNumber(widget.user.phone);
     final cleanUserEmail = widget.user.email.trim().toLowerCase();
+    final cleanUserName = widget.user.name.trim().toLowerCase();
 
     var memberRecords = db.members.where((m) {
       if (m.customerId == widget.user.id) return true;
       if (cleanUserEmail.isNotEmpty && m.customerEmail.trim().toLowerCase() == cleanUserEmail) return true;
-      final cleanMemberPhone = m.customerPhone.replaceAll(RegExp(r'[^0-9]'), '');
-      if (cleanUserPhone.length >= 6 && cleanMemberPhone.isNotEmpty) {
-        if (cleanMemberPhone.endsWith(cleanUserPhone) || cleanUserPhone.endsWith(cleanMemberPhone)) {
+      if (cleanUserPhone.length >= 6) {
+        final cleanMemberPhone = normalizePhoneNumber(m.customerPhone);
+        if (cleanMemberPhone.isNotEmpty &&
+            (cleanMemberPhone.endsWith(cleanUserPhone) || cleanUserPhone.endsWith(cleanMemberPhone))) {
           return true;
         }
       }
+      if (cleanUserName.isNotEmpty && m.customerName.trim().toLowerCase() == cleanUserName) return true;
       return false;
     }).toList();
 
@@ -99,7 +102,8 @@ class _CustomerHomeViewState extends State<CustomerHomeView> {
 
     // Customer activities (matched by userId or matched program activities)
     final customerActivities = db.activities.where((a) {
-      return a.userId == widget.user.id || (a.type == 'stamp_earned' && a.subtitle.isNotEmpty);
+      return a.userId == widget.user.id ||
+          memberRecords.any((m) => a.subtitle.contains(m.programTitle));
     }).toList();
 
     return Scaffold(
