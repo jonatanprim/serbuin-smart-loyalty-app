@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/mock_database_service.dart';
@@ -65,6 +66,23 @@ class _MerchantScanViewState extends State<MerchantScanView> with SingleTickerPr
     setState(() => _isRequestingCamera = true);
 
     try {
+      // Explicitly request camera permission using permission_handler
+      final status = await Permission.camera.request();
+      if (status.isPermanentlyDenied && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Camera permission permanently denied. Tap Settings to enable it.'),
+            action: SnackBarAction(
+              label: 'Settings',
+              textColor: Colors.white,
+              onPressed: () => openAppSettings(),
+            ),
+            backgroundColor: AppColors.accentRose,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
+
       if (_scannerController.value.isRunning) {
         await _scannerController.stop();
       }
