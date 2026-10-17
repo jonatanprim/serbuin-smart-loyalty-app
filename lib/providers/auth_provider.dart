@@ -1,8 +1,8 @@
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
-import '../services/firestore_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   AppUser? _currentUser;
@@ -46,6 +46,17 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _saveToUserRegistry(AppUser user) async {
     try {
+      // 1. Save directly to Cloud Firestore users collection
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.id)
+          .set(user.toMap(), SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Cloud Firestore save user error: $e');
+    }
+
+    try {
+      // 2. Cache locally
       final prefs = await SharedPreferences.getInstance();
       final registryJson = prefs.getString('serbuin_registered_users') ?? '[]';
       final List list = jsonDecode(registryJson);
@@ -56,40 +67,37 @@ class AuthProvider extends ChangeNotifier {
         list.add(user.toMap());
       }
       await prefs.setString('serbuin_registered_users', jsonEncode(list));
-
-      // Also sync user to Firestore
-      FirestoreService().syncMember(MemberRecord(
-        id: user.id,
-        programId: '',
-        programTitle: 'Account Registry',
-        merchantId: user.role == UserRole.merchant ? user.id : '',
-        customerId: user.id,
-        customerName: user.name,
-        customerEmail: user.email,
-        customerPhone: user.phone ?? '',
-        stampsCollected: 0,
-        totalStampsRequired: 0,
-        status: 'active',
-        lastStampDate: DateTime.now(),
-        joinedDate: user.createdAt,
-        riskLevel: 'low',
-        riskReason: 'Active account',
-        recommendedVoucher: '',
-        aiInsight: 'Registered ${user.role.name}',
-      ));
     } catch (e) {
-      debugPrint('Registry save note: $e');
+      debugPrint('Registry local cache note: $e');
     }
   }
 
   Future<AppUser?> _findInUserRegistry(String email, UserRole role) async {
+    final cleanEmail = email.trim().toLowerCase();
     try {
+      // 1. Query Cloud Firestore
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: cleanEmail)
+          .where('role', isEqualTo: role.name)
+          .limit(1)
+          .get();
+
+      if (snap.docs.isNotEmpty) {
+        return AppUser.fromMap(snap.docs.first.data());
+      }
+    } catch (e) {
+      debugPrint('Cloud Firestore user lookup note: $e');
+    }
+
+    try {
+      // 2. Fallback to local cache
       final prefs = await SharedPreferences.getInstance();
       final registryJson = prefs.getString('serbuin_registered_users');
       if (registryJson != null) {
         final List list = jsonDecode(registryJson);
         final match = list.firstWhere(
-          (u) => u['email']?.toString().toLowerCase() == email.toLowerCase() && u['role'] == role.name,
+          (u) => u['email']?.toString().toLowerCase() == cleanEmail && u['role'] == role.name,
           orElse: () => null,
         );
         if (match != null) {
