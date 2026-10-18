@@ -466,10 +466,11 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
   Future<void> _sendRetentionVoucher() async {
     setState(() => _isSending = true);
     final db = context.read<MockDatabaseService>();
+    final customerFirstName = widget.member.customerName.split(' ').first;
     await db.sendAiRetentionVoucher(
       memberId: widget.member.id,
       title: widget.member.recommendedVoucher,
-      description: 'AI Generated Retention Offer valid for 7 days.',
+      description: 'Hai $customerFirstName! Kangen kamu nih, yuk mampir lagi dan nikmati penawaran spesial ini untuk kunjunganmu berikutnya (berlaku 7 hari).',
     );
     setState(() => _isSending = false);
 
@@ -477,7 +478,7 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Voucher sent to ${widget.member.customerName}!'),
+          content: Text('Voucher ajakan spesial berhasil dikirim ke ${widget.member.customerName}!'),
           backgroundColor: AppColors.accentEmerald,
         ),
       );
@@ -640,7 +641,7 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
                   : const Icon(Icons.send_rounded, size: 18),
-              label: Text(_isSending ? 'Sending Voucher...' : 'Send AI Voucher to Customer'),
+              label: Text(_isSending ? 'Mengirim Voucher...' : 'Kirim Voucher Ajakan ke Pelanggan'),
             ),
           ),
           const SizedBox(height: 12),

@@ -113,30 +113,33 @@ async function callGemini(promptText, isJson = true) {
  * POST /api/ai/generate-program
  */
 app.post('/api/ai/generate-program', async (req, res) => {
-  const { businessPrompt, businessName, businessCategory } = req.body;
+  const { businessPrompt, businessName, businessCategory, programGoal } = req.body;
 
   if (!businessPrompt) {
     return res.status(400).json({ error: 'businessPrompt is required.' });
   }
 
   const promptText = `
-You are an expert customer loyalty designer for "Serbuin Smart Loyalty App".
+You are an expert customer loyalty designer and business strategist for "Serbuin Smart Loyalty App".
 Design a high-converting digital loyalty stamp program in strict JSON format.
 Business Name: "${businessName || 'Local Business'}"
 Category: "${businessCategory || 'General Retail'}"
 Merchant Prompt: "${businessPrompt}"
+Program Goal: "${programGoal || 'Biar Rame Saja'}" (Options: Menarik Customer Baru, Cari Untung Besar, Biar Rame Saja)
 
 Output strictly a single JSON object with these keys:
 {
   "title": "short catchy program title (e.g. Brew Master Pass, VIP Grooming Club)",
   "description": "engaging 1-2 sentence overview for customers",
   "category": "one of: Cafe & Bakery, Restaurant & Bar, Salon & Barbershop, Retail & Fashion, Fitness & Wellness, Entertainment",
-  "totalStamps": integer between 4 and 10 (ideal target),
+  "totalStamps": integer between 4 and 10 (ideal target based on goal),
+  "termsAndConditions": "Syarat & Ketentuan lengkap (contoh: Setiap minimum pembelian IDR 50.000 mendapatkan 1 stamp. Tidak berlaku kelipatan. Reward dapat ditukarkan pada kunjungan berikutnya).",
   "rewardTitle": "attractive reward title (e.g. Free Specialty Single-Origin Latte)",
   "rewardDescription": "clear reward redemption details & rules",
   "gradientColors": ["#hex1", "#hex2"],
   "iconName": "one of: coffee, restaurant, sparkles, cut, shopping_bag, fitness",
-  "aiReasoning": "1 sentence why this program mechanics maximize customer repeat visits"
+  "aiReasoning": "Penjelasan mendalam mengapa jenis stamp ini, rules/termsnya seperti itu, dan hadiahnya seperti itu disesuaikan dengan tujuan program.",
+  "financialAnalysis": "Analisis finansial estimasi keuntungan merchant atau mengapa keuntungannya kecil / benefit berupa lonjakan traffic."
 }
 `;
 
@@ -159,12 +162,14 @@ Output strictly a single JSON object with these keys:
         title: isCoffee ? 'Artisan Brew Club' : 'VIP Member Pass',
         description: `Collect stamps on every purchase at ${businessName || 'our store'}. Unlock complimentary perks!`,
         category: businessCategory || 'Cafe & Bakery',
-        totalStamps: 6,
+        totalStamps: programGoal === 'Menarik Customer Baru' ? 5 : (programGoal === 'Cari Untung Besar' ? 8 : 6),
+        termsAndConditions: 'Setiap minimum pembelian IDR 50.000 mendapatkan 1 stamp. Tidak berlaku kelipatan. Reward dapat ditukarkan pada kunjungan berikutnya.',
         rewardTitle: isCoffee ? 'Free Specialty Drink of Choice' : '30% Off Next Purchase Voucher',
         rewardDescription: 'Valid for your next store visit. Show dynamic QR code to cashier to claim.',
         gradientColors: isCoffee ? ['#6366F1', '#A855F7'] : ['#EC4899', '#FB7185'],
         iconName: isCoffee ? 'coffee' : 'sparkles',
-        aiReasoning: 'A 6-stamp milestone drives optimal 3x acceleration in customer retention cycle.',
+        aiReasoning: 'Mekanisme stamp ini dirancang untuk memaksimalkan frekuensi kunjungan ulang secara konsisten.',
+        financialAnalysis: 'Mengunci omzet transaksi customer sebelum reward ditukarkan, menjaga margin keuntungan merchant tetap positif (~75%).',
       },
     });
   }

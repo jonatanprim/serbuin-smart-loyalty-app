@@ -307,6 +307,33 @@ class _CustomerCardDetailViewState extends State<CustomerCardDetailView> {
                       currentProg.description,
                       style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
                     ),
+                    const SizedBox(height: 14),
+                    const Divider(height: 1, color: AppColors.border),
+                    const SizedBox(height: 12),
+                    const Row(
+                      children: [
+                        Icon(Icons.gavel_rounded, size: 15, color: AppColors.accentPurple),
+                        SizedBox(width: 6),
+                        Text(
+                          'Syarat & Ketentuan (Terms & Conditions):',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Text(
+                        currentProg.termsAndConditions,
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.45),
+                      ),
+                    ),
                   ],
                 ),
               ),

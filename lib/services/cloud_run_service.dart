@@ -35,6 +35,7 @@ class CloudRunService {
     required String businessPrompt,
     String? businessName,
     String? businessCategory,
+    String? programGoal,
   }) async {
     try {
       final url = Uri.parse(
@@ -48,6 +49,7 @@ class CloudRunService {
               'businessPrompt': businessPrompt,
               'businessName': businessName,
               'businessCategory': businessCategory,
+              'programGoal': programGoal,
             }),
           )
           .timeout(const Duration(seconds: 12));

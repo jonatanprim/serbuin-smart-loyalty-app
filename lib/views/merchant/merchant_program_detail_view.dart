@@ -18,6 +18,7 @@ class _MerchantProgramDetailViewState extends State<MerchantProgramDetailView> {
   late TextEditingController _descController;
   late TextEditingController _rewardTitleController;
   late TextEditingController _rewardDescController;
+  late TextEditingController _termsController;
   late bool _isActive;
   bool _isSaving = false;
 
@@ -28,6 +29,7 @@ class _MerchantProgramDetailViewState extends State<MerchantProgramDetailView> {
     _descController = TextEditingController(text: widget.program.description);
     _rewardTitleController = TextEditingController(text: widget.program.rewardTitle);
     _rewardDescController = TextEditingController(text: widget.program.rewardDescription);
+    _termsController = TextEditingController(text: widget.program.termsAndConditions);
     _isActive = widget.program.isActive;
   }
 
@@ -37,6 +39,7 @@ class _MerchantProgramDetailViewState extends State<MerchantProgramDetailView> {
     _descController.dispose();
     _rewardTitleController.dispose();
     _rewardDescController.dispose();
+    _termsController.dispose();
     super.dispose();
   }
 
@@ -49,6 +52,7 @@ class _MerchantProgramDetailViewState extends State<MerchantProgramDetailView> {
       description: _descController.text.trim(),
       rewardTitle: _rewardTitleController.text.trim(),
       rewardDescription: _rewardDescController.text.trim(),
+      termsAndConditions: _termsController.text.trim(),
       isActive: _isActive,
     );
 
@@ -226,6 +230,28 @@ class _MerchantProgramDetailViewState extends State<MerchantProgramDetailView> {
                       '${widget.program.totalStamps} Stamps Required • ${widget.program.memberCount} Members Joined',
                       style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.8)),
                     ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.gavel_rounded, size: 13, color: Colors.white70),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              widget.program.termsAndConditions,
+                              style: const TextStyle(fontSize: 11, color: Colors.white, height: 1.2),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -293,6 +319,17 @@ class _MerchantProgramDetailViewState extends State<MerchantProgramDetailView> {
                 controller: _rewardDescController,
                 maxLines: 2,
                 decoration: const InputDecoration(),
+              ),
+              const SizedBox(height: 14),
+
+              const Text('Syarat & Ketentuan (Terms & Conditions)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _termsController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  hintText: 'Contoh: Setiap minimum pembelian IDR 50.000 mendapatkan 1 stamp...',
+                ),
               ),
               const SizedBox(height: 28),
 

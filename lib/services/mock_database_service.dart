@@ -936,8 +936,8 @@ class MockDatabaseService extends ChangeNotifier {
       id: _uuid.v4(),
       userId: member.customerId,
       type: 'voucher_claimed',
-      title: 'AI Retention Voucher Sent: $title',
-      subtitle: 'Sent to ${member.customerName}',
+      title: 'Voucher Spesial Dikirim: $title',
+      subtitle: 'Terkirim ke ${member.customerName}',
       merchantName: merchantName,
       timestamp: DateTime.now(),
     );

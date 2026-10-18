@@ -231,6 +231,7 @@ class LoyaltyProgram {
   final String rewardDescription;
   final List<String> gradientColors; // Hex codes e.g. ["#6366F1", "#9333EA"]
   final String iconName;
+  final String termsAndConditions;
   final bool isActive;
   final DateTime createdAt;
   final int memberCount;
@@ -247,6 +248,7 @@ class LoyaltyProgram {
     required this.rewardDescription,
     required this.gradientColors,
     required this.iconName,
+    this.termsAndConditions = 'Setiap transaksi minimum IDR 50.000 mendapatkan 1 stamp. Tidak berlaku kelipatan. Hadiah dapat ditukarkan pada kunjungan berikutnya.',
     this.isActive = true,
     DateTime? createdAt,
     this.memberCount = 0,
@@ -264,6 +266,7 @@ class LoyaltyProgram {
     String? rewardDescription,
     List<String>? gradientColors,
     String? iconName,
+    String? termsAndConditions,
     bool? isActive,
     DateTime? createdAt,
     int? memberCount,
@@ -280,6 +283,7 @@ class LoyaltyProgram {
       rewardDescription: rewardDescription ?? this.rewardDescription,
       gradientColors: gradientColors ?? this.gradientColors,
       iconName: iconName ?? this.iconName,
+      termsAndConditions: termsAndConditions ?? this.termsAndConditions,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       memberCount: memberCount ?? this.memberCount,
@@ -299,6 +303,7 @@ class LoyaltyProgram {
       'rewardDescription': rewardDescription,
       'gradientColors': gradientColors,
       'iconName': iconName,
+      'termsAndConditions': termsAndConditions,
       'isActive': isActive,
       'createdAt': createdAt.toIso8601String(),
       'memberCount': memberCount,
@@ -318,6 +323,8 @@ class LoyaltyProgram {
       rewardDescription: map['rewardDescription'] ?? '',
       gradientColors: List<String>.from(map['gradientColors'] ?? ['#6366F1', '#9333EA']),
       iconName: map['iconName'] ?? 'coffee',
+      termsAndConditions: map['termsAndConditions'] ??
+          'Setiap transaksi minimum IDR 50.000 mendapatkan 1 stamp. Tidak berlaku kelipatan. Hadiah dapat ditukarkan pada kunjungan berikutnya.',
       isActive: map['isActive'] ?? true,
       createdAt: parseDateTimeSafe(map['createdAt']),
       memberCount: map['memberCount'] ?? 0,

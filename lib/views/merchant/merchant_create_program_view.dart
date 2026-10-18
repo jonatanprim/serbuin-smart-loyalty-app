@@ -26,12 +26,15 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
   final _descController = TextEditingController();
   final _rewardTitleController = TextEditingController();
   final _rewardDescController = TextEditingController();
+  final _termsController = TextEditingController();
 
   int _totalStamps = 6;
   String _selectedCategory = 'Cafe & Bakery';
   String _selectedIcon = 'coffee';
   List<String> _gradientColors = ['#6366F1', '#A855F7'];
   String? _aiReasoning;
+  String? _financialAnalysis;
+  String _selectedGoal = 'Biar Rame Saja';
 
   bool _isGenerating = false;
   bool _isPublishing = false;
@@ -43,6 +46,12 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
     'Retail & Fashion',
     'Fitness & Wellness',
     'Entertainment',
+  ];
+
+  final _goals = [
+    {'title': '👥 Menarik Customer Baru', 'value': 'Menarik Customer Baru', 'sub': 'Akusisi cepat, stamp ringan'},
+    {'title': '💰 Cari Untung Besar', 'value': 'Cari Untung Besar', 'sub': 'Margin tebal, basket size tinggi'},
+    {'title': '🔥 Biar Rame Saja', 'value': 'Biar Rame Saja', 'sub': 'Footfall & kunjungan berulang'},
   ];
 
   final _presetColorGradients = [
@@ -67,6 +76,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
     _descController.dispose();
     _rewardTitleController.dispose();
     _rewardDescController.dispose();
+    _termsController.dispose();
     super.dispose();
   }
 
@@ -80,6 +90,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
       businessPrompt: prompt,
       businessCategory: _selectedCategory,
       businessName: widget.merchantName,
+      programGoal: _selectedGoal,
     );
 
     setState(() {
@@ -87,18 +98,20 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
       _descController.text = template.description;
       _rewardTitleController.text = template.rewardTitle;
       _rewardDescController.text = template.rewardDescription;
+      _termsController.text = template.termsAndConditions;
       _totalStamps = template.totalStamps;
       _selectedCategory = template.category;
       _gradientColors = template.gradientColors;
       _selectedIcon = template.iconName;
       _aiReasoning = template.aiReasoning;
+      _financialAnalysis = template.financialAnalysis;
       _isGenerating = false;
     });
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('✨ Gemini AI template generated! You can customize before publishing.'),
+          content: Text('✨ Template AI & kalkulasi finansial berhasil dibuat!'),
           backgroundColor: AppColors.accentPurple,
         ),
       );
@@ -136,6 +149,9 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
       rewardDescription: _rewardDescController.text.trim().isEmpty
           ? 'Show this to the cashier to claim your reward.'
           : _rewardDescController.text.trim(),
+      termsAndConditions: _termsController.text.trim().isEmpty
+          ? 'Setiap minimum pembelian IDR 50.000 mendapatkan 1 stamp.'
+          : _termsController.text.trim(),
       gradientColors: _gradientColors,
       iconName: _selectedIcon,
       isActive: true,
@@ -222,48 +238,131 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
 
               // AI Prompt Section
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      AppColors.primary.withValues(alpha: 0.12),
+                      AppColors.primary.withValues(alpha: 0.14),
                       AppColors.accentPurple.withValues(alpha: 0.08),
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Row(
                       children: [
-                        Icon(Icons.auto_awesome_rounded, color: AppColors.primaryLight, size: 20),
+                        Icon(Icons.auto_awesome_rounded, color: AppColors.primaryLight, size: 22),
                         SizedBox(width: 8),
                         Text(
                           'Generate with Gemini AI',
                           style: TextStyle(
-                            fontSize: 15,
+                            fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     const Text(
-                      'Describe your business offering or loyalty goal. AI will create an optimized stamp mechanic & reward.',
-                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      'Rancang program loyalitas instan bertenaga AI dengan rekomendasi stamp, aturan main, dan reward yang terbukti efektif.',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.35),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Guide note for goal selection
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                      ),
+                      child: const Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.tips_and_updates_rounded, color: Colors.amberAccent, size: 18),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Silakan tentukan tujuan program Anda terlebih dahulu (menarik customer baru, cari untung besar, atau biar rame saja) agar AI menyusun jumlah stamp, syarat & ketentuan (T&C), serta reward yang paling menguntungkan.',
+                              style: TextStyle(fontSize: 11.5, color: Colors.white, height: 1.4),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 14),
+
+                    // Goal Selector Chips
+                    const Text(
+                      'Tujuan Program Loyalitas:',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _goals.map((g) {
+                        final isSelected = _selectedGoal == g['value'];
+                        return InkWell(
+                          onTap: () => setState(() => _selectedGoal = g['value']!),
+                          borderRadius: BorderRadius.circular(14),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.primary.withValues(alpha: 0.25)
+                                  : AppColors.surface,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isSelected ? AppColors.primary : AppColors.border,
+                                width: isSelected ? 1.5 : 1,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  g['title']!,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                                    color: isSelected ? Colors.white : AppColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  g['sub']!,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: isSelected ? AppColors.primaryLight : AppColors.textMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+
+                    const Text(
+                      'Deskripsi Usaha / Promo yang Diinginkan:',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
+                    ),
+                    const SizedBox(height: 6),
                     TextField(
                       controller: _aiPromptController,
                       maxLines: 2,
                       style: const TextStyle(fontSize: 13, color: Colors.white),
-                      decoration: InputDecoration(
+                      decoration: const InputDecoration(
                         filled: true,
                         fillColor: AppColors.surface,
-                        hintText: 'e.g. Modern Barber shop 5 haircuts get 6th VIP styling free',
+                        hintText: 'Contoh: Cafe kekinian ingin buat loyalty card kopi susu & pastry...',
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -296,7 +395,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
 
                     SizedBox(
                       width: double.infinity,
@@ -321,24 +420,118 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
                 ),
               ),
 
-              if (_aiReasoning != null) ...[
-                const SizedBox(height: 16),
+              // AI Strategic & Financial Breakdown Card
+              if (_aiReasoning != null || _financialAnalysis != null) ...[
+                const SizedBox(height: 20),
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceLight,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.accentCyan.withValues(alpha: 0.3)),
+                    color: AppColors.surfaceCard,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.accentCyan.withValues(alpha: 0.35)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.accentCyan.withValues(alpha: 0.08),
+                        blurRadius: 18,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
-                  child: Row(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.lightbulb_outline_rounded, color: AppColors.accentCyan, size: 18),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'AI Rationale: $_aiReasoning',
-                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.35),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.accentCyan.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.psychology_rounded, color: AppColors.accentCyan, size: 20),
+                          ),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Text(
+                              'Analisis Strategis & Finansial AI',
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.accentPurple.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              _selectedGoal,
+                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.accentPurple),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Rationale
+                      if (_aiReasoning != null) ...[
+                        const Text(
+                          '💡 Alasan Mekanisme Stamp, Rules & Hadiah:',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.accentCyan),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _aiReasoning!,
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.45),
+                        ),
+                      ],
+
+                      // Financial Projection
+                      if (_financialAnalysis != null) ...[
+                        const SizedBox(height: 14),
+                        const Divider(height: 1, color: AppColors.border),
+                        const SizedBox(height: 14),
+                        const Text(
+                          '💰 Proyeksi Keuntungan & Analisis Margin:',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.amberAccent),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.amber.withValues(alpha: 0.2)),
+                          ),
+                          child: Text(
+                            _financialAnalysis!,
+                            style: const TextStyle(fontSize: 12, color: Colors.white, height: 1.45),
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 16),
+                      // Retry Generate Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _isGenerating ? null : _generateWithAi,
+                          icon: _isGenerating
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryLight),
+                                )
+                              : const Icon(Icons.refresh_rounded, size: 16, color: AppColors.primaryLight),
+                          label: Text(
+                            _isGenerating ? 'Sedang Memproses Ulang...' : '🔄 Coba Generate Lagi (Retry AI)',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryLight),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppColors.primaryLight),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
                         ),
                       ),
                     ],
@@ -431,12 +624,24 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
               ),
               const SizedBox(height: 14),
 
-              const Text('Reward Description & Terms', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+              const Text('Reward Description', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
               const SizedBox(height: 6),
               TextField(
                 controller: _rewardDescController,
                 maxLines: 2,
                 decoration: const InputDecoration(hintText: 'e.g. Valid for any hot or cold single-origin coffee.'),
+              ),
+              const SizedBox(height: 14),
+
+              const Text('Syarat & Ketentuan (Terms & Conditions)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _termsController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  hintText: 'Contoh: Setiap minimum pembelian IDR 50.000 mendapatkan 1 stamp, atau tidak berlaku kelipatan.',
+                ),
+                onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 16),
 
@@ -596,6 +801,34 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
               ],
             ),
           ),
+          if (_termsController.text.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.gavel_rounded, size: 12, color: Colors.white70),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'S&K: ${_termsController.text.trim()}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
