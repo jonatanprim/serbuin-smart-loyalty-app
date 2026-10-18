@@ -351,10 +351,10 @@ class MemberRecord {
   final String riskReason;
   final String recommendedVoucher;
   final String aiInsight;
-  final int customerAge;
-  final String favoriteItem;
-  final String totalSpend;
-  final int totalVisits;
+  final int? customerAge;
+  final String? favoriteItem;
+  final String? totalSpend;
+  final int? totalVisits;
   final String personalizedVoucherReason;
 
   MemberRecord({
@@ -376,10 +376,10 @@ class MemberRecord {
     required this.riskReason,
     required this.recommendedVoucher,
     required this.aiInsight,
-    this.customerAge = 26,
-    this.favoriteItem = 'Signature Specialty Beverage',
-    this.totalSpend = 'IDR 280,000',
-    this.totalVisits = 5,
+    this.customerAge,
+    this.favoriteItem,
+    this.totalSpend,
+    this.totalVisits,
     this.personalizedVoucherReason = '',
   });
 
@@ -488,10 +488,10 @@ class MemberRecord {
       riskReason: map['riskReason'] ?? '',
       recommendedVoucher: map['recommendedVoucher'] ?? '',
       aiInsight: map['aiInsight'] ?? '',
-      customerAge: map['customerAge'] is int ? map['customerAge'] : 26,
-      favoriteItem: map['favoriteItem'] ?? 'Signature Specialty Beverage',
-      totalSpend: map['totalSpend'] ?? 'IDR 280,000',
-      totalVisits: map['totalVisits'] is int ? map['totalVisits'] : 5,
+      customerAge: map['customerAge'] is int ? map['customerAge'] : null,
+      favoriteItem: map['favoriteItem'] is String && (map['favoriteItem'] as String).isNotEmpty ? map['favoriteItem'] : null,
+      totalSpend: map['totalSpend'] is String && (map['totalSpend'] as String).isNotEmpty ? map['totalSpend'] : null,
+      totalVisits: map['totalVisits'] is int ? map['totalVisits'] : null,
       personalizedVoucherReason: map['personalizedVoucherReason'] ?? '',
     );
   }

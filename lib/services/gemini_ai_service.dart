@@ -462,52 +462,90 @@ Output strictly a JSON object:
     String? totalSpend,
     int? totalVisits,
   }) {
-    final age = customerAge ?? 26;
-    final item = favoriteItem ?? 'Signature Specialty Beverage';
-    final spend = totalSpend ?? 'IDR 280,000';
-    final visits = totalVisits ?? stampsCollected;
+    final hasAge = customerAge != null && customerAge > 0;
+    final ageText = hasAge ? ' (Age $customerAge)' : '';
+    final hasItem = favoriteItem != null && favoriteItem.trim().isNotEmpty;
+    final hasSpend = totalSpend != null && totalSpend.trim().isNotEmpty;
+    final hasVisits = totalVisits != null && totalVisits > 0;
+    final visitsCount = hasVisits ? totalVisits : stampsCollected;
 
     if (daysInactive >= 20) {
+      final String diagnosis =
+          '$customerName$ageText has been absent for $daysInactive days, despite holding $stampsCollected/$totalStamps stamps on "$programTitle". High probability of permanent churn without a targeted incentive.';
+
+      final String recommendedVoucherTitle;
+      final String recommendedVoucherDescription;
+      final String retentionMessage;
+
+      if (hasItem) {
+        recommendedVoucherTitle = 'Comeback Treat: 35% Off $favoriteItem';
+        recommendedVoucherDescription =
+            'Targeted comeback voucher valid for 7 days only to restart in-store visits.';
+        retentionMessage =
+            'Hey $customerName! We miss having you around. Enjoy an exclusive 35% off your favorite $favoriteItem on your next visit!';
+      } else {
+        recommendedVoucherTitle = 'Comeback Treat: 35% Off Next Visit on $programTitle';
+        recommendedVoucherDescription =
+            'Exclusive 7-day comeback voucher to reignite store visit cadence.';
+        retentionMessage =
+            'Hey $customerName! We miss having you around. Enjoy an exclusive 35% off your next visit towards $programTitle!';
+      }
+
+      final String whyRecommendedForMerchant;
+      if (hasSpend && hasItem) {
+        final prefix = hasAge ? 'Customer$ageText' : 'Customer $customerName';
+        whyRecommendedForMerchant =
+            '$prefix generated $totalSpend across $visitsCount visits with a recorded preference for "$favoriteItem". Offering 35% on their proven favorite minimizes discount waste while delivering an irresistible incentive that restores their regular visit routine.';
+      } else if (hasItem) {
+        final prefix = hasAge ? 'Customer$ageText' : 'Customer $customerName';
+        whyRecommendedForMerchant =
+            '$prefix has a recorded preference for "$favoriteItem" across $visitsCount visits. Offering a targeted 35% voucher directly on their favorite category maximizes redemption likelihood while restoring their regular habit.';
+      } else {
+        final progressPct = totalStamps > 0 ? ((stampsCollected / totalStamps) * 100).round() : 0;
+        whyRecommendedForMerchant =
+            '$customerName has already accumulated $stampsCollected of $totalStamps stamps ($progressPct% reward completion) on "$programTitle", but has been absent for $daysInactive days. Offering this targeted 35% comeback incentive protects this customer\'s accumulated loyalty investment and reignites their store visit cadence before permanent churn occurs.';
+      }
+
       return ChurnAnalysisResult(
         riskLevel: 'high',
         riskScore: (75 + (daysInactive - 20) * 2).clamp(75, 96),
-        diagnosis:
-            '$customerName (Age $age) has been absent for $daysInactive days, despite being close to their reward ($stampsCollected/$totalStamps stamps). High probability of permanent churn without a targeted incentive.',
-        recommendedVoucherTitle: 'Comeback Treat: 35% Off $item',
-        recommendedVoucherDescription:
-            'Targeted comeback voucher valid for 7 days only to restart in-store visits.',
-        retentionMessage:
-            'Hey $customerName! We miss having you around. Enjoy an exclusive 35% off your favorite $item on your next visit!',
-        whyRecommendedForMerchant:
-            'Customer (Age $age) generated $spend across $visits visits with a strong preference for "$item". Rather than giving an untargeted discount, offering 35% on their proven favorite minimizes discount waste while delivering an irresistible incentive that restores their regular visit routine.',
+        diagnosis: diagnosis,
+        recommendedVoucherTitle: recommendedVoucherTitle,
+        recommendedVoucherDescription: recommendedVoucherDescription,
+        retentionMessage: retentionMessage,
+        whyRecommendedForMerchant: whyRecommendedForMerchant,
       );
     } else if (daysInactive >= 10) {
+      final diagnosis =
+          '$customerName$ageText usually visits regularly, but $daysInactive days have passed since their last stamp on "$programTitle". Moderate disengagement risk.';
+
       return ChurnAnalysisResult(
         riskLevel: 'medium',
         riskScore: (40 + (daysInactive - 10) * 3).clamp(40, 68),
-        diagnosis:
-            '$customerName (Age $age) usually visits regularly, but $daysInactive days have passed since their last stamp. Moderate disengagement risk.',
+        diagnosis: diagnosis,
         recommendedVoucherTitle: 'Double Stamp Booster on Next Order',
         recommendedVoucherDescription:
             'Receive +2 bonus stamps on your next visit this week.',
         retentionMessage:
             'Hi $customerName! Stop by this week to earn Double Stamps towards your $programTitle!',
         whyRecommendedForMerchant:
-            'Because this customer is still moderately active with $stampsCollected/$totalStamps stamps, bonus stamps preserve your profit margins completely while prompting an immediate return visit.',
+            'Because $customerName is still moderately active with $stampsCollected/$totalStamps stamps, bonus stamps preserve your profit margins completely while prompting an immediate return visit within 7 days.',
       );
     } else {
+      final diagnosis =
+          '$customerName$ageText is an active, loyal customer with consistent engagement ($stampsCollected/$totalStamps stamps collected on "$programTitle"). Low churn risk.';
+
       return ChurnAnalysisResult(
         riskLevel: 'low',
         riskScore: (10 + daysInactive * 2).clamp(10, 28),
-        diagnosis:
-            '$customerName (Age $age) is an active, loyal customer with consistent engagement ($stampsCollected/$totalStamps stamps collected). Low churn risk.',
+        diagnosis: diagnosis,
         recommendedVoucherTitle: 'VIP Loyalty Perk: Free Size Upgrade',
         recommendedVoucherDescription:
             'Complimentary size upgrade or artisan topping on next visit.',
         retentionMessage:
             'Thank you for being a valued member, $customerName! Enjoy a complimentary upgrade on your next visit.',
         whyRecommendedForMerchant:
-            'Healthy customer with recent visits. No financial discounting is required; surprise loyalty perks reinforce customer goodwill at near-zero merchant cost.',
+            'Healthy customer with recent visits ($daysInactive days ago). No financial discounting is required; surprise loyalty perks reinforce customer goodwill at near-zero merchant cost.',
       );
     }
   }

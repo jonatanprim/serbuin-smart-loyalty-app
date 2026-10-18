@@ -585,23 +585,94 @@ class _MemberAiDetailModal extends StatefulWidget {
 class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
   bool _isSending = false;
   late ChurnAnalysisResult _analysis;
+  int? _resolvedAge;
+  String? _resolvedFavorite;
+  String? _resolvedSpend;
+  int? _resolvedVisits;
 
   @override
   void initState() {
     super.initState();
     final m = widget.member;
-    // Generate specialized analysis customized for this single member's age, order history & inactivity
+    _resolvedAge = m.customerAge;
+    _resolvedFavorite = m.favoriteItem;
+    _resolvedSpend = m.totalSpend;
+    _resolvedVisits = m.totalVisits ?? (m.stampsCollected > 0 ? m.stampsCollected : null);
+
+    // Initial analysis strictly using real verified data (no dummy fallbacks)
     _analysis = GeminiAiService().generateLocalChurnAnalysis(
       customerName: m.customerName,
       stampsCollected: m.stampsCollected,
       totalStamps: m.totalStampsRequired,
       daysInactive: DateTime.now().difference(m.lastStampDate).inDays,
       programTitle: m.programTitle,
-      customerAge: m.customerAge,
-      favoriteItem: m.favoriteItem,
-      totalSpend: m.totalSpend,
-      totalVisits: m.totalVisits,
+      customerAge: _resolvedAge,
+      favoriteItem: _resolvedFavorite,
+      totalSpend: _resolvedSpend,
+      totalVisits: _resolvedVisits,
     );
+
+    // Asynchronously resolve registered customer profile (birthDate / favoriteCategory) if available
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _lookupRealProfile();
+    });
+  }
+
+  Future<void> _lookupRealProfile() async {
+    final db = context.read<MockDatabaseService>();
+    final m = widget.member;
+
+    // Count real visits from db activities if available
+    final realActivitiesCount = db.activities.where((a) => a.userId == m.customerId).length;
+    final realVisits = realActivitiesCount > 0 ? realActivitiesCount : (m.stampsCollected > 0 ? m.stampsCollected : null);
+
+    final userData = await db.getCustomerProfileData(m.customerId, m.customerPhone);
+    if (!mounted) return;
+
+    int? computedAge = m.customerAge;
+    String? favCategory = m.favoriteItem;
+
+    if (userData != null) {
+      final profileMap = userData['customerProfile'] is Map ? userData['customerProfile'] as Map : null;
+      final birthDateStr = profileMap?['birthDate'] ?? userData['birthDate'];
+      if (birthDateStr is String && birthDateStr.isNotEmpty) {
+        final bDate = DateTime.tryParse(birthDateStr);
+        if (bDate != null) {
+          final now = DateTime.now();
+          int age = now.year - bDate.year;
+          if (now.month < bDate.month || (now.month == bDate.month && now.day < bDate.day)) {
+            age--;
+          }
+          if (age > 0 && age < 120) {
+            computedAge = age;
+          }
+        }
+      }
+
+      final favStr = profileMap?['favoriteCategory'] ?? userData['favoriteCategory'];
+      if (favStr is String && favStr.trim().isNotEmpty) {
+        favCategory = favStr.trim();
+      }
+    }
+
+    if (computedAge != _resolvedAge || favCategory != _resolvedFavorite || realVisits != _resolvedVisits) {
+      setState(() {
+        _resolvedAge = computedAge;
+        _resolvedFavorite = favCategory;
+        _resolvedVisits = realVisits;
+        _analysis = GeminiAiService().generateLocalChurnAnalysis(
+          customerName: m.customerName,
+          stampsCollected: m.stampsCollected,
+          totalStamps: m.totalStampsRequired,
+          daysInactive: DateTime.now().difference(m.lastStampDate).inDays,
+          programTitle: m.programTitle,
+          customerAge: _resolvedAge,
+          favoriteItem: _resolvedFavorite,
+          totalSpend: _resolvedSpend,
+          totalVisits: _resolvedVisits,
+        );
+      });
+    }
   }
 
   Future<void> _sendRetentionVoucher() async {
@@ -705,7 +776,7 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
 
               const SizedBox(height: 18),
 
-              // Customer Profile & Order History Demographics Card
+              // Customer Profile & Order History Demographics Card (Real Data Only)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
@@ -717,35 +788,75 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'CUSTOMER PROFILE & ORDER HISTORY',
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primaryLight, letterSpacing: 0.7),
-                    ),
-                    const SizedBox(height: 10),
                     Row(
                       children: [
-                        _DemographicPill(icon: Icons.cake_rounded, label: 'Age: ${member.customerAge} yrs'),
-                        const SizedBox(width: 8),
-                        _DemographicPill(icon: Icons.repeat_rounded, label: '${member.totalVisits} store visits'),
-                        const SizedBox(width: 8),
-                        _DemographicPill(icon: Icons.schedule_rounded, label: '$daysInactive days absent'),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(Icons.favorite_rounded, size: 14, color: AppColors.accentRose),
+                        const Icon(Icons.verified_user_rounded, size: 13, color: AppColors.primaryLight),
                         const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Favorite: ${member.favoriteItem} • ${member.totalSpend} lifetime spend',
-                            style: const TextStyle(fontSize: 11.5, color: Colors.white, fontWeight: FontWeight.w600),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                        Text(
+                          (_resolvedAge != null || _resolvedFavorite != null || _resolvedSpend != null)
+                              ? 'VERIFIED CUSTOMER PROFILE & HISTORY'
+                              : 'VERIFIED LOYALTY CARD ACTIVITY',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primaryLight,
+                            letterSpacing: 0.7,
                           ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (_resolvedAge != null)
+                          _DemographicPill(icon: Icons.cake_rounded, label: 'Age: $_resolvedAge yrs'),
+                        if (_resolvedVisits != null)
+                          _DemographicPill(
+                            icon: Icons.repeat_rounded,
+                            label: '$_resolvedVisits visit${_resolvedVisits! > 1 ? 's' : ''}',
+                          ),
+                        _DemographicPill(
+                          icon: Icons.schedule_rounded,
+                          label: daysInactive == 0 ? 'Active today' : '$daysInactive days absent',
+                        ),
+                        _DemographicPill(
+                          icon: Icons.stars_rounded,
+                          label: '${member.stampsCollected}/${member.totalStampsRequired} stamps',
+                        ),
+                      ],
+                    ),
+                    if (_resolvedFavorite != null || _resolvedSpend != null) ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          const Icon(Icons.favorite_rounded, size: 14, color: AppColors.accentRose),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              [
+                                if (_resolvedFavorite != null) 'Favorite: $_resolvedFavorite',
+                                if (_resolvedSpend != null) 'Spend: $_resolvedSpend',
+                              ].join(' • '),
+                              style: const TextStyle(fontSize: 11.5, color: Colors.white, fontWeight: FontWeight.w600),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Enrolled in ${member.programTitle} • No extra demographic survey recorded. AI retention strategy is calibrated strictly on verified visit activity and stamp progress.',
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          color: AppColors.textSecondary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

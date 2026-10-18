@@ -481,6 +481,57 @@ class MockDatabaseService extends ChangeNotifier {
   Future<Map<String, String>?> findRegisteredCustomerByPhone(String phone) =>
       findRegisteredCustomer(phone);
 
+  /// Fetch full customer profile data (birthDate, favoriteCategory, etc.) for real data lookup
+  Future<Map<String, dynamic>?> getCustomerProfileData(String customerId, [String? phone]) async {
+    final cleanId = customerId.trim().toLowerCase();
+    final cleanPhone = phone != null ? normalizePhoneNumber(phone) : '';
+
+    // 1. Try from live Firestore
+    try {
+      if (cleanId.isNotEmpty) {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(customerId).get();
+        if (doc.exists && doc.data() != null) {
+          return doc.data();
+        }
+      }
+      final querySnap = await FirebaseFirestore.instance.collection('users').get();
+      for (final doc in querySnap.docs) {
+        final data = doc.data();
+        final docId = (data['id'] ?? doc.id).toString().toLowerCase();
+        final docPhone = normalizePhoneNumber((data['phone'] ?? '').toString());
+        if (cleanId.isNotEmpty && docId == cleanId) return data;
+        if (cleanPhone.isNotEmpty && docPhone.isNotEmpty && (docPhone.endsWith(cleanPhone) || cleanPhone.endsWith(docPhone))) {
+          return data;
+        }
+      }
+    } catch (e) {
+      debugPrint('Firestore customer profile fetch note: $e');
+    }
+
+    // 2. Try from local preferences registered users cache
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final regJson = prefs.getString('serbuin_registered_users');
+      if (regJson != null) {
+        final List list = jsonDecode(regJson);
+        for (final item in list) {
+          if (item is Map) {
+            final uId = (item['id'] ?? '').toString().toLowerCase();
+            final uPhone = normalizePhoneNumber((item['phone'] ?? '').toString());
+            if (cleanId.isNotEmpty && uId == cleanId) {
+              return Map<String, dynamic>.from(item);
+            }
+            if (cleanPhone.isNotEmpty && uPhone.isNotEmpty && (uPhone.endsWith(cleanPhone) || cleanPhone.endsWith(uPhone))) {
+              return Map<String, dynamic>.from(item);
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
   /// Fetch all registered customers from Firestore
   Future<List<Map<String, String>>> getAllRegisteredCustomers() async {
     final list = <Map<String, String>>[];
