@@ -322,13 +322,13 @@ class _MerchantProgramDetailViewState extends State<MerchantProgramDetailView> {
               ),
               const SizedBox(height: 14),
 
-              const Text('Syarat & Ketentuan (Terms & Conditions)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+              const Text('Terms & Conditions (T&C)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
               const SizedBox(height: 6),
               TextField(
                 controller: _termsController,
                 maxLines: 3,
                 decoration: const InputDecoration(
-                  hintText: 'Contoh: Setiap minimum pembelian IDR 50.000 mendapatkan 1 stamp...',
+                  hintText: 'e.g. Every minimum purchase of IDR 50,000 earns 1 stamp. Not valid for multiples on a single receipt.',
                 ),
               ),
               const SizedBox(height: 28),

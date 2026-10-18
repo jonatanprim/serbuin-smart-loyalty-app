@@ -1017,7 +1017,7 @@ class _StackedLoyaltyCardItem extends StatelessWidget {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'S&K: ${program.termsAndConditions}',
+                        'T&C: ${program.termsAndConditions}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(

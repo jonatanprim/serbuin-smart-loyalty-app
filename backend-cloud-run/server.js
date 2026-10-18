@@ -133,13 +133,13 @@ Output strictly a single JSON object with these keys:
   "description": "engaging 1-2 sentence overview for customers",
   "category": "one of: Cafe & Bakery, Restaurant & Bar, Salon & Barbershop, Retail & Fashion, Fitness & Wellness, Entertainment",
   "totalStamps": integer between 4 and 10 (ideal target based on goal),
-  "termsAndConditions": "Syarat & Ketentuan lengkap (contoh: Setiap minimum pembelian IDR 50.000 mendapatkan 1 stamp. Tidak berlaku kelipatan. Reward dapat ditukarkan pada kunjungan berikutnya).",
+  "termsAndConditions": "Full Terms & Conditions in English (e.g. Every minimum purchase of IDR 50,000 earns 1 stamp. Not valid for multiples on a single receipt. Rewards can be claimed on your next visit).",
   "rewardTitle": "attractive reward title (e.g. Free Specialty Single-Origin Latte)",
   "rewardDescription": "clear reward redemption details & rules",
   "gradientColors": ["#hex1", "#hex2"],
   "iconName": "one of: coffee, restaurant, sparkles, cut, shopping_bag, fitness",
-  "aiReasoning": "Penjelasan mendalam mengapa jenis stamp ini, rules/termsnya seperti itu, dan hadiahnya seperti itu disesuaikan dengan tujuan program.",
-  "financialAnalysis": "Analisis finansial estimasi keuntungan merchant atau mengapa keuntungannya kecil / benefit berupa lonjakan traffic."
+  "aiReasoning": "Deep strategic rationale explaining why this stamp mechanic, these T&C rules, and this reward were selected for this business goal.",
+  "financialAnalysis": "Detailed financial breakdown: projected merchant profit margin (locked revenue vs reward COGS), or explanation of volume/traffic benefits."
 }
 `;
 
@@ -162,14 +162,14 @@ Output strictly a single JSON object with these keys:
         title: isCoffee ? 'Artisan Brew Club' : 'VIP Member Pass',
         description: `Collect stamps on every purchase at ${businessName || 'our store'}. Unlock complimentary perks!`,
         category: businessCategory || 'Cafe & Bakery',
-        totalStamps: programGoal === 'Menarik Customer Baru' ? 5 : (programGoal === 'Cari Untung Besar' ? 8 : 6),
-        termsAndConditions: 'Setiap minimum pembelian IDR 50.000 mendapatkan 1 stamp. Tidak berlaku kelipatan. Reward dapat ditukarkan pada kunjungan berikutnya.',
+        totalStamps: (programGoal && (programGoal.includes('New') || programGoal.includes('Baru'))) ? 5 : ((programGoal && (programGoal.includes('Profit') || programGoal.includes('Untung'))) ? 8 : 6),
+        termsAndConditions: 'Every minimum purchase of IDR 50,000 earns 1 stamp. Not valid for multiples on a single receipt. Rewards can be claimed on your next visit.',
         rewardTitle: isCoffee ? 'Free Specialty Drink of Choice' : '30% Off Next Purchase Voucher',
         rewardDescription: 'Valid for your next store visit. Show dynamic QR code to cashier to claim.',
         gradientColors: isCoffee ? ['#6366F1', '#A855F7'] : ['#EC4899', '#FB7185'],
         iconName: isCoffee ? 'coffee' : 'sparkles',
-        aiReasoning: 'Mekanisme stamp ini dirancang untuk memaksimalkan frekuensi kunjungan ulang secara konsisten.',
-        financialAnalysis: 'Mengunci omzet transaksi customer sebelum reward ditukarkan, menjaga margin keuntungan merchant tetap positif (~75%).',
+        aiReasoning: 'This stamp mechanic is tailored to maximize consistent visit frequency and repeat basket size.',
+        financialAnalysis: 'Locks in cumulative customer transaction value before rewards can be unlocked, maintaining strong merchant profit margins (~75-82%).',
       },
     });
   }

@@ -347,9 +347,15 @@ class MemberRecord {
   final DateTime lastStampDate;
   final DateTime joinedDate;
   final String riskLevel; // 'low', 'medium', 'high'
+  final int churnScore; // 0 - 100 percentage
   final String riskReason;
   final String recommendedVoucher;
   final String aiInsight;
+  final int customerAge;
+  final String favoriteItem;
+  final String totalSpend;
+  final int totalVisits;
+  final String personalizedVoucherReason;
 
   MemberRecord({
     required this.id,
@@ -366,9 +372,15 @@ class MemberRecord {
     required this.lastStampDate,
     required this.joinedDate,
     required this.riskLevel,
+    this.churnScore = 20,
     required this.riskReason,
     required this.recommendedVoucher,
     required this.aiInsight,
+    this.customerAge = 26,
+    this.favoriteItem = 'Signature Specialty Beverage',
+    this.totalSpend = 'IDR 280,000',
+    this.totalVisits = 5,
+    this.personalizedVoucherReason = '',
   });
 
   MemberRecord copyWith({
@@ -386,9 +398,15 @@ class MemberRecord {
     DateTime? lastStampDate,
     DateTime? joinedDate,
     String? riskLevel,
+    int? churnScore,
     String? riskReason,
     String? recommendedVoucher,
     String? aiInsight,
+    int? customerAge,
+    String? favoriteItem,
+    String? totalSpend,
+    int? totalVisits,
+    String? personalizedVoucherReason,
   }) {
     return MemberRecord(
       id: id ?? this.id,
@@ -405,9 +423,15 @@ class MemberRecord {
       lastStampDate: lastStampDate ?? this.lastStampDate,
       joinedDate: joinedDate ?? this.joinedDate,
       riskLevel: riskLevel ?? this.riskLevel,
+      churnScore: churnScore ?? this.churnScore,
       riskReason: riskReason ?? this.riskReason,
       recommendedVoucher: recommendedVoucher ?? this.recommendedVoucher,
       aiInsight: aiInsight ?? this.aiInsight,
+      customerAge: customerAge ?? this.customerAge,
+      favoriteItem: favoriteItem ?? this.favoriteItem,
+      totalSpend: totalSpend ?? this.totalSpend,
+      totalVisits: totalVisits ?? this.totalVisits,
+      personalizedVoucherReason: personalizedVoucherReason ?? this.personalizedVoucherReason,
     );
   }
 
@@ -427,13 +451,24 @@ class MemberRecord {
       'lastStampDate': lastStampDate.toIso8601String(),
       'joinedDate': joinedDate.toIso8601String(),
       'riskLevel': riskLevel,
+      'churnScore': churnScore,
       'riskReason': riskReason,
       'recommendedVoucher': recommendedVoucher,
       'aiInsight': aiInsight,
+      'customerAge': customerAge,
+      'favoriteItem': favoriteItem,
+      'totalSpend': totalSpend,
+      'totalVisits': totalVisits,
+      'personalizedVoucherReason': personalizedVoucherReason,
     };
   }
 
   factory MemberRecord.fromMap(Map<String, dynamic> map) {
+    final rawLevel = map['riskLevel'] ?? 'low';
+    final computedScore = map['churnScore'] is int
+        ? map['churnScore']
+        : (rawLevel == 'high' ? 84 : (rawLevel == 'medium' ? 52 : 14));
+
     return MemberRecord(
       id: map['id'] ?? '',
       programId: map['programId'] ?? '',
@@ -448,10 +483,16 @@ class MemberRecord {
       status: map['status'] ?? 'active',
       lastStampDate: parseDateTimeSafe(map['lastStampDate']),
       joinedDate: parseDateTimeSafe(map['joinedDate']),
-      riskLevel: map['riskLevel'] ?? 'low',
+      riskLevel: rawLevel,
+      churnScore: computedScore,
       riskReason: map['riskReason'] ?? '',
       recommendedVoucher: map['recommendedVoucher'] ?? '',
       aiInsight: map['aiInsight'] ?? '',
+      customerAge: map['customerAge'] is int ? map['customerAge'] : 26,
+      favoriteItem: map['favoriteItem'] ?? 'Signature Specialty Beverage',
+      totalSpend: map['totalSpend'] ?? 'IDR 280,000',
+      totalVisits: map['totalVisits'] is int ? map['totalVisits'] : 5,
+      personalizedVoucherReason: map['personalizedVoucherReason'] ?? '',
     );
   }
 }

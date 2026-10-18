@@ -34,7 +34,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
   List<String> _gradientColors = ['#6366F1', '#A855F7'];
   String? _aiReasoning;
   String? _financialAnalysis;
-  String _selectedGoal = 'Biar Rame Saja';
+  String _selectedGoal = 'Boost Store Footfall';
 
   bool _isGenerating = false;
   bool _isPublishing = false;
@@ -49,9 +49,9 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
   ];
 
   final _goals = [
-    {'title': '👥 Menarik Customer Baru', 'value': 'Menarik Customer Baru', 'sub': 'Akusisi cepat, stamp ringan'},
-    {'title': '💰 Cari Untung Besar', 'value': 'Cari Untung Besar', 'sub': 'Margin tebal, basket size tinggi'},
-    {'title': '🔥 Biar Rame Saja', 'value': 'Biar Rame Saja', 'sub': 'Footfall & kunjungan berulang'},
+    {'title': '👥 Attract New Customers', 'value': 'Attract New Customers', 'sub': 'Fast acquisition, low stamp barrier'},
+    {'title': '💰 Maximize High Profits', 'value': 'Maximize High Profits', 'sub': 'Thick margin, higher basket size'},
+    {'title': '🔥 Boost Store Footfall', 'value': 'Boost Store Footfall', 'sub': 'Daily footfall & repeat visits'},
   ];
 
   final _presetColorGradients = [
@@ -111,7 +111,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('✨ Template AI & kalkulasi finansial berhasil dibuat!'),
+          content: Text('✨ AI template & financial breakdown generated successfully!'),
           backgroundColor: AppColors.accentPurple,
         ),
       );
@@ -150,7 +150,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
           ? 'Show this to the cashier to claim your reward.'
           : _rewardDescController.text.trim(),
       termsAndConditions: _termsController.text.trim().isEmpty
-          ? 'Setiap minimum pembelian IDR 50.000 mendapatkan 1 stamp.'
+          ? 'Every minimum purchase of IDR 50,000 earns 1 stamp. Not valid for multiples on a single receipt. Rewards can be claimed on your next visit.'
           : _termsController.text.trim(),
       gradientColors: _gradientColors,
       iconName: _selectedIcon,
@@ -268,7 +268,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
                     ),
                     const SizedBox(height: 6),
                     const Text(
-                      'Rancang program loyalitas instan bertenaga AI dengan rekomendasi stamp, aturan main, dan reward yang terbukti efektif.',
+                      'Design high-converting loyalty programs powered by Gemini AI with optimal stamps, rules, and rewards.',
                       style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.35),
                     ),
                     const SizedBox(height: 16),
@@ -288,7 +288,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
                           SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'Silakan tentukan tujuan program Anda terlebih dahulu (menarik customer baru, cari untung besar, atau biar rame saja) agar AI menyusun jumlah stamp, syarat & ketentuan (T&C), serta reward yang paling menguntungkan.',
+                              'Please select your loyalty program goal (Attract New Customers, Maximize High Profits, or Boost Store Footfall) so Gemini AI can tailor the stamp count, minimum purchase rules (T&C), and rewards for maximum business impact.',
                               style: TextStyle(fontSize: 11.5, color: Colors.white, height: 1.4),
                             ),
                           ),
@@ -299,7 +299,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
 
                     // Goal Selector Chips
                     const Text(
-                      'Tujuan Program Loyalitas:',
+                      'Loyalty Program Goal:',
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
                     ),
                     const SizedBox(height: 8),
@@ -351,7 +351,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
                     const SizedBox(height: 16),
 
                     const Text(
-                      'Deskripsi Usaha / Promo yang Diinginkan:',
+                      'Business Offering & Desired Promo:',
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
                     ),
                     const SizedBox(height: 6),
@@ -362,7 +362,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
                       decoration: const InputDecoration(
                         filled: true,
                         fillColor: AppColors.surface,
-                        hintText: 'Contoh: Cafe kekinian ingin buat loyalty card kopi susu & pastry...',
+                        hintText: 'e.g. Trendy specialty cafe offering loyalty stamps for artisan coffee & pastries...',
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -453,7 +453,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
                           const SizedBox(width: 10),
                           const Expanded(
                             child: Text(
-                              'Analisis Strategis & Finansial AI',
+                              'AI Strategic & Financial Breakdown',
                               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
                             ),
                           ),
@@ -475,7 +475,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
                       // Rationale
                       if (_aiReasoning != null) ...[
                         const Text(
-                          '💡 Alasan Mekanisme Stamp, Rules & Hadiah:',
+                          '💡 Stamp Mechanics, Rules & Reward Rationale:',
                           style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.accentCyan),
                         ),
                         const SizedBox(height: 6),
@@ -491,7 +491,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
                         const Divider(height: 1, color: AppColors.border),
                         const SizedBox(height: 14),
                         const Text(
-                          '💰 Proyeksi Keuntungan & Analisis Margin:',
+                          '💰 Profit Projection & Margin Analysis:',
                           style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.amberAccent),
                         ),
                         const SizedBox(height: 6),
@@ -524,7 +524,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
                                 )
                               : const Icon(Icons.refresh_rounded, size: 16, color: AppColors.primaryLight),
                           label: Text(
-                            _isGenerating ? 'Sedang Memproses Ulang...' : '🔄 Coba Generate Lagi (Retry AI)',
+                            _isGenerating ? 'Regenerating with AI...' : '🔄 Regenerate with AI (Retry)',
                             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryLight),
                           ),
                           style: OutlinedButton.styleFrom(
@@ -633,13 +633,13 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
               ),
               const SizedBox(height: 14),
 
-              const Text('Syarat & Ketentuan (Terms & Conditions)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+              const Text('Terms & Conditions (T&C)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
               const SizedBox(height: 6),
               TextField(
                 controller: _termsController,
                 maxLines: 3,
                 decoration: const InputDecoration(
-                  hintText: 'Contoh: Setiap minimum pembelian IDR 50.000 mendapatkan 1 stamp, atau tidak berlaku kelipatan.',
+                  hintText: 'e.g. Every minimum purchase of IDR 50,000 earns 1 stamp. Not valid for multiples on a single receipt.',
                 ),
                 onChanged: (_) => setState(() {}),
               ),
@@ -815,7 +815,7 @@ class _MerchantCreateProgramViewState extends State<MerchantCreateProgramView> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'S&K: ${_termsController.text.trim()}',
+                      'T&C: ${_termsController.text.trim()}',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(

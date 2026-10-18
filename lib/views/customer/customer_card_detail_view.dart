@@ -315,7 +315,7 @@ class _CustomerCardDetailViewState extends State<CustomerCardDetailView> {
                         Icon(Icons.gavel_rounded, size: 15, color: AppColors.accentPurple),
                         SizedBox(width: 6),
                         Text(
-                          'Syarat & Ketentuan (Terms & Conditions):',
+                          'Terms & Conditions (T&C):',
                           style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
                         ),
                       ],

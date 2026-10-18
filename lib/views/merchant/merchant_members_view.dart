@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
+import '../../services/gemini_ai_service.dart';
 import '../../services/mock_database_service.dart';
 import '../../theme/app_theme.dart';
 
@@ -16,28 +17,30 @@ class MerchantMembersView extends StatefulWidget {
 class _MerchantMembersViewState extends State<MerchantMembersView> {
   String _selectedProgramFilter = 'All';
   String _selectedStatusFilter = 'All';
-  bool _isAiScanning = false;
+  String _selectedRiskFilter = 'All'; // 'All', 'High Risk', 'Medium Risk', 'Low Risk'
+  String _selectedSortBy = 'churn_desc'; // 'churn_desc', 'churn_asc', 'stamps_desc', 'inactive_desc'
+  bool _isAutoScanning = false;
   String? _lastScanTimestamp;
 
-  Future<void> _runAiChurnScan() async {
-    setState(() => _isAiScanning = true);
-    await Future.delayed(const Duration(milliseconds: 1000));
-    setState(() {
-      _isAiScanning = false;
-      _lastScanTimestamp = 'Just now';
-    });
+  @override
+  void initState() {
+    super.initState();
+    _triggerAutoChurnScan();
+  }
 
+  Future<void> _triggerAutoChurnScan() async {
+    setState(() => _isAutoScanning = true);
+    // Simulate real-time background AI churn scan on view open
+    await Future.delayed(const Duration(milliseconds: 700));
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✨ AI Churn Risk Scan complete! Retention vouchers recommended for at-risk members.'),
-          backgroundColor: AppColors.accentPurple,
-        ),
-      );
+      setState(() {
+        _isAutoScanning = false;
+        _lastScanTimestamp = 'Live Scanned';
+      });
     }
   }
 
-  void _showAiMemberDetail(MemberRecord member) async {
+  void _showAiMemberDetail(MemberRecord member) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -61,6 +64,30 @@ class _MerchantMembersViewState extends State<MerchantMembersView> {
       filteredMembers = filteredMembers.where((m) => m.status.toLowerCase() == _selectedStatusFilter.toLowerCase()).toList();
     }
 
+    if (_selectedRiskFilter != 'All') {
+      if (_selectedRiskFilter == 'High Risk') {
+        filteredMembers = filteredMembers.where((m) => m.riskLevel == 'high').toList();
+      } else if (_selectedRiskFilter == 'Medium Risk') {
+        filteredMembers = filteredMembers.where((m) => m.riskLevel == 'medium').toList();
+      } else if (_selectedRiskFilter == 'Low Risk') {
+        filteredMembers = filteredMembers.where((m) => m.riskLevel == 'low').toList();
+      }
+    }
+
+    // Sort according to _selectedSortBy (e.g. churn rate low to high or high to low)
+    filteredMembers.sort((a, b) {
+      if (_selectedSortBy == 'churn_desc') {
+        return b.churnScore.compareTo(a.churnScore); // High to Low churn rate
+      } else if (_selectedSortBy == 'churn_asc') {
+        return a.churnScore.compareTo(b.churnScore); // Low to High churn rate
+      } else if (_selectedSortBy == 'stamps_desc') {
+        return b.stampsCollected.compareTo(a.stampsCollected);
+      } else {
+        // Most days inactive first
+        return a.lastStampDate.compareTo(b.lastStampDate);
+      }
+    });
+
     final highRiskCount = filteredMembers.where((m) => m.riskLevel == 'high').length;
 
     return Scaffold(
@@ -70,48 +97,58 @@ class _MerchantMembersViewState extends State<MerchantMembersView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
+              // Header without manual scan button (Automatic scanning active)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Member Directory',
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
-                      ),
-                      Text(
-                        _lastScanTimestamp != null
-                            ? '${filteredMembers.length} members • AI scanned $_lastScanTimestamp'
-                            : '${filteredMembers.length} members enrolled',
-                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                      ),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Member Directory',
+                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${filteredMembers.length} enrolled members • ${_lastScanTimestamp ?? "AI Churn Rate auto-scanned"}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
                   ),
-                  ElevatedButton.icon(
-                    onPressed: _isAiScanning ? null : _runAiChurnScan,
-                    icon: _isAiScanning
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentPurple.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.accentPurple.withValues(alpha: 0.35)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_isAutoScanning)
+                          const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accentPurple),
                           )
-                        : const Icon(Icons.auto_awesome_rounded, size: 16),
-                    label: Text(_isAiScanning ? 'Scanning...' : 'AI Scan', style: const TextStyle(fontSize: 12)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.accentPurple,
-                      minimumSize: const Size(0, 38),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        else
+                          const Icon(Icons.bolt_rounded, size: 14, color: AppColors.accentPurple),
+                        const SizedBox(width: 5),
+                        Text(
+                          _isAutoScanning ? 'Auto-Scanning...' : 'Live Risk Scan',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.accentPurple),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
 
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
 
-              // AI Risk Summary Alert
+              // AI Risk Summary Alert Banner
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
@@ -153,14 +190,14 @@ class _MerchantMembersViewState extends State<MerchantMembersView> {
                         children: [
                           Text(
                             highRiskCount > 0
-                                ? '$highRiskCount At-Risk Member${highRiskCount > 1 ? "s" : ""} Detected'
-                                : 'All Members Healthy & Retained',
+                                ? '$highRiskCount High Churn Risk Member${highRiskCount > 1 ? "s" : ""} Detected'
+                                : 'All Members Healthy & Actively Retained',
                             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white),
                           ),
                           Text(
                             highRiskCount > 0
-                                ? 'AI generated personalized comeback vouchers to re-engage them.'
-                                : 'Visit cadences are consistent with loyalty milestones.',
+                                ? 'AI analyzed customer order history & age to craft targeted retention vouchers.'
+                                : 'Visit cadences align with healthy customer retention benchmarks.',
                             style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                           ),
                         ],
@@ -170,9 +207,78 @@ class _MerchantMembersViewState extends State<MerchantMembersView> {
                 ),
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
 
-              // Filter 1: By Loyalty Program
+              // Churn Rate Filter & Sorting Controls
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Filter by Churn Risk',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+                  ),
+                  // Sort dropdown
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedSortBy,
+                        dropdownColor: AppColors.surfaceCard,
+                        icon: const Icon(Icons.sort_rounded, size: 16, color: AppColors.primaryLight),
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
+                        items: const [
+                          DropdownMenuItem(value: 'churn_desc', child: Text('Churn: High to Low')),
+                          DropdownMenuItem(value: 'churn_asc', child: Text('Churn: Low to High')),
+                          DropdownMenuItem(value: 'stamps_desc', child: Text('Stamps: High to Low')),
+                          DropdownMenuItem(value: 'inactive_desc', child: Text('Most Inactive First')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) setState(() => _selectedSortBy = val);
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // Churn Risk Chips
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _FilterChip(
+                      label: 'All Risks',
+                      isSelected: _selectedRiskFilter == 'All',
+                      onTap: () => setState(() => _selectedRiskFilter = 'All'),
+                    ),
+                    _FilterChip(
+                      label: '🚨 High Risk (75-96%)',
+                      isSelected: _selectedRiskFilter == 'High Risk',
+                      onTap: () => setState(() => _selectedRiskFilter = 'High Risk'),
+                    ),
+                    _FilterChip(
+                      label: '⚠️ Medium Risk (40-70%)',
+                      isSelected: _selectedRiskFilter == 'Medium Risk',
+                      onTap: () => setState(() => _selectedRiskFilter = 'Medium Risk'),
+                    ),
+                    _FilterChip(
+                      label: '✅ Low Risk (<30%)',
+                      isSelected: _selectedRiskFilter == 'Low Risk',
+                      onTap: () => setState(() => _selectedRiskFilter = 'Low Risk'),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // Filter 2: By Loyalty Program
               const Text(
                 'Filter by Program',
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
@@ -200,7 +306,7 @@ class _MerchantMembersViewState extends State<MerchantMembersView> {
 
               const SizedBox(height: 14),
 
-              // Filter 2: By Member Status
+              // Filter 3: By Member Status
               const Text(
                 'Filter by Status',
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
@@ -321,16 +427,15 @@ class _MemberCard extends StatelessWidget {
     final isMediumRisk = member.riskLevel == 'medium';
 
     Color riskColor = AppColors.accentEmerald;
-    String riskLabel = 'Low Churn Risk';
+    String riskLabel = 'Low Risk';
     if (isHighRisk) {
       riskColor = AppColors.accentRose;
-      riskLabel = 'High Churn Risk';
+      riskLabel = 'High Churn';
     } else if (isMediumRisk) {
       riskColor = AppColors.accentAmber;
       riskLabel = 'Medium Risk';
     }
 
-    // Ensure display name is customer username, never raw phone number
     String displayName = member.customerName.trim();
     if (displayName.isEmpty ||
         displayName.startsWith('Member (+') ||
@@ -356,14 +461,14 @@ class _MemberCard extends StatelessWidget {
           color: AppColors.surfaceCard,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: isHighRisk ? AppColors.accentRose.withValues(alpha: 0.3) : AppColors.border,
+            color: isHighRisk ? AppColors.accentRose.withValues(alpha: 0.35) : AppColors.border,
+            width: isHighRisk ? 1.5 : 1,
           ),
         ),
         child: Column(
           children: [
             Row(
               children: [
-                // Avatar with initials
                 CircleAvatar(
                   radius: 20,
                   backgroundColor: AppColors.surfaceLight,
@@ -393,7 +498,6 @@ class _MemberCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                // Stamp counter badge
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
@@ -412,7 +516,7 @@ class _MemberCard extends StatelessWidget {
             const Divider(height: 1, color: AppColors.border),
             const SizedBox(height: 10),
 
-            // AI Retention Strip
+            // AI Retention & Churn Rate Strip
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -425,23 +529,41 @@ class _MemberCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      riskLabel,
+                      '${member.churnScore}% $riskLabel',
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: riskColor),
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      '• $daysInactive days ago',
+                      '• $daysInactive days inactive',
                       style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
                     ),
                   ],
                 ),
-                const Row(
-                  children: [
-                    Text('AI Voucher', style: TextStyle(fontSize: 11, color: AppColors.primaryLight, fontWeight: FontWeight.w700)),
-                    SizedBox(width: 4),
-                    Icon(Icons.arrow_forward_ios_rounded, size: 10, color: AppColors.primaryLight),
-                  ],
-                ),
+                // Only display AI Voucher badge if member is High Risk!
+                if (isHighRisk)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentRose.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.accentRose.withValues(alpha: 0.35)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.auto_awesome_rounded, size: 11, color: AppColors.accentRose),
+                        SizedBox(width: 4),
+                        Text('AI Voucher', style: TextStyle(fontSize: 10, color: AppColors.accentRose, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  )
+                else
+                  const Row(
+                    children: [
+                      Text('Details', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                      SizedBox(width: 2),
+                      Icon(Icons.chevron_right_rounded, size: 14, color: AppColors.textMuted),
+                    ],
+                  ),
               ],
             ),
           ],
@@ -462,15 +584,35 @@ class _MemberAiDetailModal extends StatefulWidget {
 
 class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
   bool _isSending = false;
+  late ChurnAnalysisResult _analysis;
+
+  @override
+  void initState() {
+    super.initState();
+    final m = widget.member;
+    // Generate specialized analysis customized for this single member's age, order history & inactivity
+    _analysis = GeminiAiService().generateLocalChurnAnalysis(
+      customerName: m.customerName,
+      stampsCollected: m.stampsCollected,
+      totalStamps: m.totalStampsRequired,
+      daysInactive: DateTime.now().difference(m.lastStampDate).inDays,
+      programTitle: m.programTitle,
+      customerAge: m.customerAge,
+      favoriteItem: m.favoriteItem,
+      totalSpend: m.totalSpend,
+      totalVisits: m.totalVisits,
+    );
+  }
 
   Future<void> _sendRetentionVoucher() async {
     setState(() => _isSending = true);
     final db = context.read<MockDatabaseService>();
     final customerFirstName = widget.member.customerName.split(' ').first;
+
     await db.sendAiRetentionVoucher(
       memberId: widget.member.id,
-      title: widget.member.recommendedVoucher,
-      description: 'Hai $customerFirstName! Kangen kamu nih, yuk mampir lagi dan nikmati penawaran spesial ini untuk kunjunganmu berikutnya (berlaku 7 hari).',
+      title: _analysis.recommendedVoucherTitle,
+      description: 'Hey $customerFirstName! We miss seeing you. Here is an exclusive treat for your next visit (valid for 7 days).',
     );
     setState(() => _isSending = false);
 
@@ -478,7 +620,7 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Voucher ajakan spesial berhasil dikirim ke ${widget.member.customerName}!'),
+          content: Text('🎉 Personalized retention voucher successfully delivered to ${widget.member.customerName}!'),
           backgroundColor: AppColors.accentEmerald,
         ),
       );
@@ -489,6 +631,7 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
   Widget build(BuildContext context) {
     final member = widget.member;
     final isHigh = member.riskLevel == 'high';
+    final daysInactive = DateTime.now().difference(member.lastStampDate).inDays;
 
     return SafeArea(
       top: false,
@@ -498,156 +641,297 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
           color: AppColors.surfaceCard,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
-            ),
-          ),
-          const SizedBox(height: 18),
-
-          Row(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isHigh ? AppColors.accentRose.withValues(alpha: 0.15) : AppColors.accentEmerald.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  isHigh ? Icons.warning_rounded : Icons.person_rounded,
-                  color: isHigh ? AppColors.accentRose : AppColors.accentEmerald,
-                  size: 26,
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
                 ),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      member.customerName,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white),
-                    ),
-                    Text(
-                      '${member.stampsCollected} / ${member.totalStampsRequired} Stamps • ${member.programTitle}',
-                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+              const SizedBox(height: 18),
 
-          const SizedBox(height: 20),
-
-          // AI Diagnosis Card
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceLight,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Row(
-                  children: [
-                    Icon(Icons.auto_awesome_rounded, color: AppColors.primaryLight, size: 16),
-                    SizedBox(width: 6),
-                    Text(
-                      'AI CHURN SCANNER DIAGNOSIS',
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isHigh ? AppColors.accentRose.withValues(alpha: 0.15) : AppColors.accentEmerald.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isHigh ? Icons.warning_rounded : Icons.person_rounded,
+                      color: isHigh ? AppColors.accentRose : AppColors.accentEmerald,
+                      size: 26,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          member.customerName,
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white),
+                        ),
+                        Text(
+                          '${member.stampsCollected} / ${member.totalStampsRequired} Stamps • ${member.programTitle}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isHigh ? AppColors.accentRose.withValues(alpha: 0.2) : AppColors.accentEmerald.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${_analysis.riskScore}% ${member.riskLevel.toUpperCase()}',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.primaryLight,
-                        letterSpacing: 0.8,
+                        color: isHigh ? AppColors.accentRose : AppColors.accentEmerald,
                       ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 18),
+
+              // Customer Profile & Order History Demographics Card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'CUSTOMER PROFILE & ORDER HISTORY',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primaryLight, letterSpacing: 0.7),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        _DemographicPill(icon: Icons.cake_rounded, label: 'Age: ${member.customerAge} yrs'),
+                        const SizedBox(width: 8),
+                        _DemographicPill(icon: Icons.repeat_rounded, label: '${member.totalVisits} store visits'),
+                        const SizedBox(width: 8),
+                        _DemographicPill(icon: Icons.schedule_rounded, label: '$daysInactive days absent'),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.favorite_rounded, size: 14, color: AppColors.accentRose),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Favorite: ${member.favoriteItem} • ${member.totalSpend} lifetime spend',
+                            style: const TextStyle(fontSize: 11.5, color: Colors.white, fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  member.riskReason,
-                  style: const TextStyle(fontSize: 13, color: Colors.white, height: 1.4),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'AI Insight: ${member.aiInsight}',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Recommended Voucher Offer
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.primary.withValues(alpha: 0.15),
-                  AppColors.accentPurple.withValues(alpha: 0.1),
-                ],
               ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'RECOMMENDED RETENTION VOUCHER',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primaryLight,
-                    letterSpacing: 0.8,
+
+              const SizedBox(height: 14),
+
+              // AI Churn Diagnosis Card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: isHigh ? AppColors.accentRose.withValues(alpha: 0.3) : AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.auto_awesome_rounded, color: AppColors.primaryLight, size: 16),
+                        SizedBox(width: 6),
+                        Text(
+                          'AI CHURN SCANNER DIAGNOSIS',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primaryLight,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _analysis.diagnosis,
+                      style: const TextStyle(fontSize: 13, color: Colors.white, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // If NOT High Risk, hide voucher button and show healthy notice!
+              if (!isHigh) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentEmerald.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.accentEmerald.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_rounded, color: AppColors.accentEmerald, size: 22),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Customer is currently active with a low ${_analysis.riskScore}% churn rate. AI retention vouchers are reserved for high-risk members to preserve profit margins.',
+                          style: const TextStyle(fontSize: 12, color: Colors.white, height: 1.4),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  member.recommendedVoucher,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close'),
+                  ),
                 ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Triggers an urgent incentive notification to restart customer store visits.',
-                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                const SizedBox(height: 12),
+              ] else ...[
+                // High Risk Member: Show personalized AI Voucher & Merchant Strategy
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.primary.withValues(alpha: 0.15),
+                        AppColors.accentPurple.withValues(alpha: 0.1),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'PERSONALIZED RETENTION VOUCHER FOR THIS CUSTOMER',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primaryLight,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _analysis.recommendedVoucherTitle,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _analysis.recommendedVoucherDescription,
+                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: 12),
+                      const Divider(height: 1, color: AppColors.border),
+                      const SizedBox(height: 10),
+
+                      // Why this voucher is better to give to this customer:
+                      const Row(
+                        children: [
+                          Icon(Icons.psychology_rounded, size: 14, color: Colors.amberAccent),
+                          SizedBox(width: 6),
+                          Text(
+                            'Why this voucher is optimal for this customer:',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.amberAccent),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _analysis.whyRecommendedForMerchant,
+                        style: const TextStyle(fontSize: 11.5, color: Colors.white, height: 1.4),
+                      ),
+                    ],
+                  ),
                 ),
+
+                const SizedBox(height: 20),
+
+                // Action Button (Only present for High Risk)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isSending ? null : _sendRetentionVoucher,
+                    icon: _isSending
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.send_rounded, size: 18),
+                    label: Text(_isSending ? 'Delivering Voucher...' : 'Send Personalized AI Voucher to Customer'),
+                  ),
+                ),
+                const SizedBox(height: 12),
               ],
-            ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+}
 
-          const SizedBox(height: 24),
+class _DemographicPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
 
-          // Action Button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _isSending ? null : _sendRetentionVoucher,
-              icon: _isSending
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.send_rounded, size: 18),
-              label: Text(_isSending ? 'Mengirim Voucher...' : 'Kirim Voucher Ajakan ke Pelanggan'),
-            ),
-          ),
-          const SizedBox(height: 12),
+  const _DemographicPill({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: AppColors.primaryLight),
+          const SizedBox(width: 4),
+          Text(label, style: const TextStyle(fontSize: 10.5, color: Colors.white70, fontWeight: FontWeight.w600)),
         ],
       ),
-    ),
-  );
-}
+    );
+  }
 }
