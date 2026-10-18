@@ -23,6 +23,8 @@ class _CustomerHomeViewState extends State<CustomerHomeView> {
   String _selectedStatus = 'All';
   final Map<String, int> _previousCardStamps = {};
   String? _lastStampedCardId;
+  final Set<String> _previouslyRedeemedVouchers = {};
+  bool _isFirstVoucherCheck = true;
 
   @override
   void dispose() {
@@ -64,6 +66,56 @@ class _CustomerHomeViewState extends State<CustomerHomeView> {
         .where((v) => v.customerId == widget.user.id && !v.isRedeemed && DateTime.now().isBefore(v.expiresAt))
         .toList();
     final voucherCount = customerVouchers.length;
+
+    // Detect voucher redeemed in real-time
+    final allUserVouchers = db.vouchers.where((v) => v.customerId == widget.user.id).toList();
+    final redeemedUserVouchers = allUserVouchers.where((v) => v.isRedeemed).toList();
+    final currentRedeemedVoucherIds = redeemedUserVouchers.map((v) => v.id).toSet();
+
+    if (!_isFirstVoucherCheck) {
+      for (final v in redeemedUserVouchers) {
+        if (!_previouslyRedeemedVouchers.contains(v.id)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Voucher Sudah Digunakan',
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.white),
+                          ),
+                          Text(
+                            '${v.title} telah berhasil digunakan.',
+                            style: const TextStyle(fontSize: 12, color: Colors.white70),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: AppColors.accentEmerald,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          });
+          break;
+        }
+      }
+    }
+    _previouslyRedeemedVouchers.clear();
+    _previouslyRedeemedVouchers.addAll(currentRedeemedVoucherIds);
+    _isFirstVoucherCheck = false;
 
     // Member records for this customer (matched by customerId, phone, email, or name)
     final cleanUserPhone = normalizePhoneNumber(widget.user.phone);

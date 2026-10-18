@@ -616,38 +616,197 @@ class MockDatabaseService extends ChangeNotifier {
     };
   }
 
-  /// Redeem voucher by QR scan
-  Future<Map<String, dynamic>> redeemVoucherByCode(String code) async {
-    final index = _vouchers.indexWhere((v) => v.code.toUpperCase() == code.toUpperCase());
-    if (index == -1) {
-      return {'success': false, 'message': 'Invalid voucher code.'};
+  /// Utility to clean and normalize voucher codes from QR payloads or inputs
+  static String cleanVoucherCode(String input) {
+    var code = input.trim();
+    if (code.startsWith('VOUCHER|')) {
+      code = code.substring(8);
+    }
+    // Remove dynamic refresh suffix like -REF1, -REF2, etc.
+    code = code.replaceAll(RegExp(r'-REF\d+$', caseSensitive: false), '');
+    return code.trim();
+  }
+
+  /// Look up voucher by scanned QR payload, voucher code, or ID
+  Future<Voucher?> findVoucher(String rawCode) async {
+    final clean = cleanVoucherCode(rawCode);
+    if (clean.isEmpty) return null;
+
+    final cleanUpper = clean.toUpperCase();
+    final rawUpper = rawCode.trim().toUpperCase();
+
+    // 1. Check in loaded vouchers
+    for (final v in _vouchers) {
+      if (v.code.toUpperCase() == cleanUpper ||
+          v.id.toUpperCase() == cleanUpper ||
+          v.code.toUpperCase() == rawUpper ||
+          v.id.toUpperCase() == rawUpper) {
+        return v;
+      }
     }
 
-    final voucher = _vouchers[index];
-    if (voucher.isRedeemed) {
+    // 2. Query live Cloud Firestore if not found in memory
+    try {
+      final firestore = FirebaseFirestore.instance;
+      // Search by code
+      var snap = await firestore
+          .collection('vouchers')
+          .where('code', isEqualTo: cleanUpper)
+          .limit(1)
+          .get();
+
+      if (snap.docs.isEmpty) {
+        snap = await firestore
+            .collection('vouchers')
+            .where('code', isEqualTo: clean)
+            .limit(1)
+            .get();
+      }
+
+      if (snap.docs.isEmpty) {
+        // Try getting by document ID
+        final doc = await firestore.collection('vouchers').doc(clean).get();
+        if (doc.exists && doc.data() != null) {
+          final data = Map<String, dynamic>.from(doc.data()!);
+          data['id'] = data['id'] ?? doc.id;
+          final v = Voucher.fromMap(data);
+          final idx = _vouchers.indexWhere((x) => x.id == v.id);
+          if (idx == -1) {
+            _vouchers.insert(0, v);
+          } else {
+            _vouchers[idx] = v;
+          }
+          await _saveToStorage();
+          notifyListeners();
+          return v;
+        }
+      } else {
+        final doc = snap.docs.first;
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] = data['id'] ?? doc.id;
+        final v = Voucher.fromMap(data);
+        final idx = _vouchers.indexWhere((x) => x.id == v.id);
+        if (idx == -1) {
+          _vouchers.insert(0, v);
+        } else {
+          _vouchers[idx] = v;
+        }
+        await _saveToStorage();
+        notifyListeners();
+        return v;
+      }
+    } catch (e) {
+      debugPrint('Firestore findVoucher query note: $e');
+    }
+
+    return null;
+  }
+
+  /// Get the most recent transaction date and activity description for a customer
+  Map<String, dynamic> getLastCustomerTransaction(String customerId, {String? merchantId}) {
+    DateTime? latestDate;
+    String description = 'Aktivitas loyalty card';
+    int? stampsCount;
+
+    // 1. Inspect activities
+    final userActivities = _activities.where((a) => a.userId == customerId).toList();
+    if (merchantId != null && merchantId.isNotEmpty) {
+      // Prioritize activities for this merchant if any
+      final merchantProgs = _programs.where((p) => p.merchantId == merchantId).map((p) => p.title.toLowerCase()).toSet();
+      final merchantActs = userActivities.where((a) =>
+          merchantProgs.contains(a.subtitle.toLowerCase()) ||
+          a.merchantName.isNotEmpty).toList();
+      if (merchantActs.isNotEmpty) {
+        merchantActs.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        latestDate = merchantActs.first.timestamp;
+        description = '${merchantActs.first.title} (${merchantActs.first.subtitle})';
+        stampsCount = merchantActs.first.stampsCount;
+      }
+    }
+
+    if (latestDate == null && userActivities.isNotEmpty) {
+      userActivities.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      latestDate = userActivities.first.timestamp;
+      description = '${userActivities.first.title} (${userActivities.first.subtitle})';
+      stampsCount = userActivities.first.stampsCount;
+    }
+
+    // 2. Inspect members lastStampDate
+    final userMembers = _members.where((m) => m.customerId == customerId).toList();
+    if (userMembers.isNotEmpty) {
+      userMembers.sort((a, b) => b.lastStampDate.compareTo(a.lastStampDate));
+      final memberLastDate = userMembers.first.lastStampDate;
+      if (latestDate == null || memberLastDate.isAfter(latestDate)) {
+        latestDate = memberLastDate;
+        description = 'Stempel terakhir di ${userMembers.first.programTitle}';
+        stampsCount = userMembers.first.stampsCollected;
+      }
+    }
+
+    return {
+      'date': latestDate,
+      'description': description,
+      'stamps': stampsCount,
+    };
+  }
+
+  /// Force refresh vouchers list from Firestore
+  Future<void> refreshVouchers() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection('vouchers').get();
+      final list = <Voucher>[];
+      for (final doc in snap.docs) {
+        try {
+          final data = Map<String, dynamic>.from(doc.data());
+          data['id'] = data['id'] ?? doc.id;
+          list.add(Voucher.fromMap(data));
+        } catch (e) {
+          debugPrint('Error parsing voucher ${doc.id}: $e');
+        }
+      }
+      _vouchers = list;
+      await _saveToStorage();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('refreshVouchers error: $e');
+    }
+  }
+
+  /// Approve and redeem voucher object
+  Future<Map<String, dynamic>> redeemVoucher(Voucher voucher) async {
+    final index = _vouchers.indexWhere((v) => v.id == voucher.id || v.code.toUpperCase() == voucher.code.toUpperCase());
+    final currentVoucher = index != -1 ? _vouchers[index] : voucher;
+
+    if (currentVoucher.isRedeemed) {
+      final redeemedStr = currentVoucher.redeemedAt != null ? _formatDate(currentVoucher.redeemedAt!) : 'sebelumnya';
       return {
         'success': false,
-        'message': 'Voucher has already been redeemed on ${_formatDate(voucher.redeemedAt!)}.',
+        'message': 'Voucher sudah digunakan pada $redeemedStr.',
       };
     }
 
-    if (DateTime.now().isAfter(voucher.expiresAt)) {
-      return {'success': false, 'message': 'Voucher has expired.'};
+    if (DateTime.now().isAfter(currentVoucher.expiresAt)) {
+      return {'success': false, 'message': 'Voucher telah kedaluwarsa.'};
     }
 
-    final updated = voucher.copyWith(
+    final updated = currentVoucher.copyWith(
       isRedeemed: true,
       redeemedAt: DateTime.now(),
     );
-    _vouchers[index] = updated;
+
+    if (index != -1) {
+      _vouchers[index] = updated;
+    } else {
+      _vouchers.insert(0, updated);
+    }
 
     final act = ActivityLog(
       id: _uuid.v4(),
-      userId: voucher.customerId,
+      userId: updated.customerId,
       type: 'voucher_redeemed',
-      title: 'Voucher Redeemed!',
-      subtitle: '${voucher.title} • ${voucher.discountValue}',
-      merchantName: voucher.merchantName,
+      title: 'Voucher Sudah Digunakan',
+      subtitle: '${updated.title} • Digunakan di ${updated.merchantName}',
+      merchantName: updated.merchantName,
       timestamp: DateTime.now(),
     );
     _activities.insert(0, act);
@@ -668,11 +827,31 @@ class MockDatabaseService extends ChangeNotifier {
       debugPrint('Firestore redeem voucher error: $e');
     }
 
+    // Trigger Cloud Run FCM push notification to customer
+    CloudRunService().sendFcmNotification(
+      customerId: updated.customerId,
+      title: 'Voucher Sudah Digunakan',
+      body: 'Voucher "${updated.title}" telah berhasil digunakan di ${updated.merchantName}.',
+    );
+
     return {
       'success': true,
       'voucher': updated,
-      'message': 'Voucher successfully redeemed: ${voucher.title}!',
+      'message': 'Voucher "${updated.title}" berhasil disetujui & digunakan!',
     };
+  }
+
+  /// Redeem voucher by QR scan code
+  Future<Map<String, dynamic>> redeemVoucherByCode(String code) async {
+    final clean = cleanVoucherCode(code);
+    var voucher = await findVoucher(clean);
+    voucher ??= await findVoucher(code);
+
+    if (voucher == null) {
+      return {'success': false, 'message': 'Voucher tidak ditemukan.'};
+    }
+
+    return redeemVoucher(voucher);
   }
 
   /// Send AI retention voucher to a member

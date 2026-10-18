@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/mock_database_service.dart';
 import '../../theme/app_theme.dart';
+import 'reward_confirm_bottom_sheet.dart';
 
 class MerchantScanView extends StatefulWidget {
   final String merchantId;
@@ -59,7 +60,103 @@ class _MerchantScanViewState extends State<MerchantScanView> {
     );
 
     if (result != null && result['phone'] != null && result['phone']!.isNotEmpty) {
-      _handleCustomerLookup(result['phone']!, providedName: result['name']);
+      _handleScanOrInput(result['phone']!, providedName: result['name']);
+    }
+  }
+
+  /// Handles incoming scan code or manual input: checks for Voucher first, else member stamp lookup
+  void _handleScanOrInput(String query, {String? providedName}) async {
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+
+    final db = context.read<MockDatabaseService>();
+
+    // 1. Check if the code represents a Reward Voucher
+    final voucher = await db.findVoucher(query);
+    if (voucher != null) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        _showVoucherApprovalSheet(voucher);
+      }
+      return;
+    }
+
+    // 2. Otherwise treat as Member Lookup for stamp awarding
+    _handleCustomerLookup(query, providedName: providedName);
+  }
+
+  /// Shows the Voucher Approval BottomSheet with last customer transaction date
+  void _showVoucherApprovalSheet(Voucher voucher) async {
+    final db = context.read<MockDatabaseService>();
+
+    // Resolve customer details
+    final regUser = await db.findRegisteredCustomer(voucher.customerId);
+    String custName = regUser?['name'] ?? '';
+    String custPhone = regUser?['phone'] ?? '';
+
+    if (custName.isEmpty) {
+      final member = db.members.where((m) => m.customerId == voucher.customerId).firstOrNull;
+      if (member != null) {
+        custName = member.customerName;
+        custPhone = member.customerPhone;
+      }
+    }
+    if (custName.isEmpty) {
+      custName = 'Member (${voucher.customerId})';
+    }
+
+    final txInfo = db.getLastCustomerTransaction(voucher.customerId, merchantId: widget.merchantId);
+    final lastDate = txInfo['date'] as DateTime? ?? voucher.claimedAt;
+    final lastNote = txInfo['description'] as String?;
+
+    if (!mounted) return;
+
+    final approved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => RewardConfirmBottomSheet(
+        voucher: voucher,
+        merchantId: widget.merchantId,
+        customerName: custName,
+        customerPhone: custPhone,
+        lastTransactionDate: lastDate,
+        lastTransactionNote: lastNote,
+      ),
+    );
+
+    if (approved == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Voucher Berhasil Disetujui!',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Colors.white),
+                    ),
+                    Text(
+                      '${voucher.title} telah digunakan. Pelanggan telah menerima notifikasi.',
+                      style: const TextStyle(fontSize: 11, color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppColors.accentEmerald,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      Navigator.of(context).pop(); // Return to merchant home
     }
   }
 
@@ -569,7 +666,7 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                   }
                   _lastScannedCode = code;
                   _lastScannedTime = DateTime.now();
-                  _handleCustomerLookup(code);
+                  _handleScanOrInput(code);
                 }
               }
             },
@@ -878,7 +975,7 @@ class _InputManualBottomSheetState extends State<_InputManualBottomSheet> {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Enter customer phone number to look up their membership card and award stamps.',
+            'Enter customer phone number to look up their membership card, or enter voucher code (e.g. SRB-XXXXX).',
             style: TextStyle(
               fontSize: 12,
               color: AppColors.textSecondary,
@@ -888,12 +985,12 @@ class _InputManualBottomSheetState extends State<_InputManualBottomSheet> {
           const SizedBox(height: 20),
           TextField(
             controller: _phoneController,
-            keyboardType: TextInputType.phone,
+            keyboardType: TextInputType.text,
             autofocus: true,
             decoration: const InputDecoration(
-              labelText: 'Customer Phone Number',
-              hintText: 'e.g. 081234567890 or +62812...',
-              prefixIcon: Icon(Icons.phone_rounded, color: AppColors.primaryLight, size: 20),
+              labelText: 'Phone Number or Voucher Code',
+              hintText: 'e.g. 081234567890 or SRB-XXXXX',
+              prefixIcon: Icon(Icons.dialpad_rounded, color: AppColors.primaryLight, size: 20),
             ),
             onSubmitted: (_) => _submit(),
           ),

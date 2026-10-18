@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -7,26 +8,94 @@ import '../../models/models.dart';
 import '../../services/mock_database_service.dart';
 import '../../theme/app_theme.dart';
 
-class CustomerVouchersView extends StatelessWidget {
+class CustomerVouchersView extends StatefulWidget {
   final String customerId;
 
   const CustomerVouchersView({super.key, required this.customerId});
 
-  void _showVoucherDetail(BuildContext context, Voucher voucher) {
-    showModalBottomSheet(
+  @override
+  State<CustomerVouchersView> createState() => _CustomerVouchersViewState();
+}
+
+class _CustomerVouchersViewState extends State<CustomerVouchersView> {
+  final Set<String> _previouslyRedeemedIds = {};
+  bool _isFirstCheck = true;
+
+  void _showVoucherDetail(Voucher voucher) async {
+    final result = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _VoucherDetailWithTimerSheet(voucher: voucher),
+    );
+
+    if (result == 'voucher_already_used' && mounted) {
+      final db = context.read<MockDatabaseService>();
+      await db.refreshVouchers();
+
+      if (mounted) {
+        _showVoucherUsedSnackBar(voucher);
+      }
+    }
+  }
+
+  void _showVoucherUsedSnackBar(Voucher voucher) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Voucher Sudah Digunakan',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.white),
+                  ),
+                  Text(
+                    '${voucher.title} telah berhasil digunakan.',
+                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: AppColors.accentEmerald,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        duration: const Duration(seconds: 4),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final db = context.watch<MockDatabaseService>();
-    final vouchers = db.vouchers.where((v) => v.customerId == customerId).toList();
+    final vouchers = db.vouchers.where((v) => v.customerId == widget.customerId).toList();
     final activeVouchers = vouchers.where((v) => !v.isRedeemed && DateTime.now().isBefore(v.expiresAt)).toList();
     final redeemedVouchers = vouchers.where((v) => v.isRedeemed).toList();
+
+    // Check if any voucher transitioned to redeemed in real-time
+    final currentRedeemedIds = redeemedVouchers.map((v) => v.id).toSet();
+    if (!_isFirstCheck) {
+      for (final v in redeemedVouchers) {
+        if (!_previouslyRedeemedIds.contains(v.id)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showVoucherUsedSnackBar(v);
+          });
+          break;
+        }
+      }
+    }
+    _previouslyRedeemedIds.clear();
+    _previouslyRedeemedIds.addAll(currentRedeemedIds);
+    _isFirstCheck = false;
 
     return Scaffold(
       appBar: AppBar(
@@ -34,8 +103,15 @@ class CustomerVouchersView extends StatelessWidget {
         centerTitle: true,
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: RefreshIndicator(
+          onRefresh: () async {
+            await db.refreshVouchers();
+          },
+          color: AppColors.primaryLight,
+          backgroundColor: AppColors.surfaceCard,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -113,7 +189,7 @@ class CustomerVouchersView extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _VoucherCardItem(
                       voucher: voucher,
-                      onTap: () => _showVoucherDetail(context, voucher),
+                      onTap: () => _showVoucherDetail(voucher),
                     ),
                   );
                 }),
@@ -133,7 +209,7 @@ class CustomerVouchersView extends StatelessWidget {
                     child: _VoucherCardItem(
                       voucher: voucher,
                       isPast: true,
-                      onTap: () => _showVoucherDetail(context, voucher),
+                      onTap: () => _showVoucherDetail(voucher),
                     ),
                   );
                 }),
@@ -141,6 +217,7 @@ class CustomerVouchersView extends StatelessWidget {
               const SizedBox(height: 24),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -282,13 +359,58 @@ class _VoucherDetailWithTimerSheet extends StatefulWidget {
 
 class _VoucherDetailWithTimerSheetState extends State<_VoucherDetailWithTimerSheet> {
   Timer? _timer;
+  StreamSubscription<DocumentSnapshot>? _voucherSub;
   int _secondsRemaining = 120; // 2 minutes auto refresh timer
   int _refreshCounter = 1;
+  bool _hasAutoClosed = false;
 
   @override
   void initState() {
     super.initState();
     _startTimer();
+    _listenForVoucherRedemption();
+  }
+
+  void _listenForVoucherRedemption() {
+    try {
+      _voucherSub = FirebaseFirestore.instance
+          .collection('vouchers')
+          .doc(widget.voucher.id)
+          .snapshots()
+          .listen((snapshot) {
+        if (!mounted) return;
+        if (snapshot.exists && snapshot.data() != null) {
+          final data = snapshot.data()!;
+          if (data['isRedeemed'] == true) {
+            _triggerAutoClose();
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint('Firestore voucher sub error: $e');
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final db = context.watch<MockDatabaseService>();
+    final latest = db.vouchers.where((v) => v.id == widget.voucher.id).firstOrNull;
+    if (latest != null && latest.isRedeemed) {
+      _triggerAutoClose();
+    }
+  }
+
+  void _triggerAutoClose() {
+    if (_hasAutoClosed || !mounted) return;
+    _hasAutoClosed = true;
+    _timer?.cancel();
+    _voucherSub?.cancel();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Navigator.of(context).pop('voucher_already_used');
+      }
+    });
   }
 
   void _startTimer() {
@@ -311,6 +433,7 @@ class _VoucherDetailWithTimerSheetState extends State<_VoucherDetailWithTimerShe
   @override
   void dispose() {
     _timer?.cancel();
+    _voucherSub?.cancel();
     super.dispose();
   }
 
