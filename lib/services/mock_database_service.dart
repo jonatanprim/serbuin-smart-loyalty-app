@@ -1216,6 +1216,364 @@ class MockDatabaseService extends ChangeNotifier {
     return newMember;
   }
 
+  /// Generate realistic mock customer data for testing live churn risk & AI retention vouchers
+  Future<int> generateMockCustomerData({
+    required String merchantId,
+    required String programId,
+  }) async {
+    final progIndex = _programs.indexWhere((p) => p.id == programId);
+    if (progIndex == -1) return 0;
+    final program = _programs[progIndex];
+
+    final mockProfiles = [
+      {
+        'id': 'cust-mock-01',
+        'name': 'Amanda Putri',
+        'email': 'amanda.putri@serbuin.com',
+        'phone': '081234567801',
+        'birthDate': '1998-04-12',
+        'bio': 'Coffee enthusiast and remote product designer.',
+        'favoriteCategory': 'Signature Beverages',
+        'favoriteItem': 'Signature Iced Caramel Macchiato',
+        'stamps': (program.totalStamps * 0.7).round().clamp(1, program.totalStamps - 1),
+        'daysInactive': 42,
+        'riskLevel': 'high',
+        'churnScore': 89,
+        'riskReason': '42 days without visit despite being close to reward unlocking.',
+        'aiInsight': 'High engagement history now at immediate risk of churn.',
+        'totalVisits': 7,
+        'totalSpend': 'IDR 315,000',
+      },
+      {
+        'id': 'cust-mock-02',
+        'name': 'Budi Santoso',
+        'email': 'budi.santoso@serbuin.com',
+        'phone': '081234567802',
+        'birthDate': '1993-09-25',
+        'bio': 'Architect who loves morning espresso and pastries.',
+        'favoriteCategory': 'Bakery & Pastry',
+        'favoriteItem': 'Almond Croissant & Double Espresso',
+        'stamps': (program.totalStamps * 0.8).round().clamp(1, program.totalStamps - 1),
+        'daysInactive': 48,
+        'riskLevel': 'high',
+        'churnScore': 93,
+        'riskReason': 'High risk: 48 days inactive with high stamp progress.',
+        'aiInsight': 'Very high lifetime value customer at urgent churn risk.',
+        'totalVisits': 8,
+        'totalSpend': 'IDR 420,000',
+      },
+      {
+        'id': 'cust-mock-03',
+        'name': 'Citra Dewi',
+        'email': 'citra.dewi@serbuin.com',
+        'phone': '081234567803',
+        'birthDate': '2001-02-18',
+        'bio': 'University student and matcha lover.',
+        'favoriteCategory': 'Matcha & Tea',
+        'favoriteItem': 'Kyoto Ceremonial Matcha Latte',
+        'stamps': (program.totalStamps * 0.5).round().clamp(1, program.totalStamps - 1),
+        'daysInactive': 36,
+        'riskLevel': 'high',
+        'churnScore': 82,
+        'riskReason': 'Inactivity exceeded 5 weeks after reaching halfway mark.',
+        'aiInsight': 'Responds strongly to student discounts and afternoon treats.',
+        'totalVisits': 5,
+        'totalSpend': 'IDR 195,000',
+      },
+      {
+        'id': 'cust-mock-04',
+        'name': 'Dimas Pratama',
+        'email': 'dimas.pratama@serbuin.com',
+        'phone': '081234567804',
+        'birthDate': '1996-07-08',
+        'bio': 'Tech consultant & frequent digital nomad.',
+        'favoriteCategory': 'Cold Brew',
+        'favoriteItem': 'Nitro Vanilla Cold Brew',
+        'stamps': (program.totalStamps * 0.4).round().clamp(1, program.totalStamps - 1),
+        'daysInactive': 22,
+        'riskLevel': 'medium',
+        'churnScore': 58,
+        'riskReason': 'Visit cadence dropped from weekly to zero visits in 3 weeks.',
+        'aiInsight': 'Moderate churn risk. A timely reminder offer will re-engage.',
+        'totalVisits': 4,
+        'totalSpend': 'IDR 180,000',
+      },
+      {
+        'id': 'cust-mock-05',
+        'name': 'Eka Wijaya',
+        'email': 'eka.wijaya@serbuin.com',
+        'phone': '081234567805',
+        'birthDate': '1999-11-30',
+        'bio': 'Food blogger & dessert aficionado.',
+        'favoriteCategory': 'Pastry',
+        'favoriteItem': 'Cinnamon Roll & Flat White',
+        'stamps': (program.totalStamps * 0.3).round().clamp(1, program.totalStamps - 1),
+        'daysInactive': 19,
+        'riskLevel': 'medium',
+        'churnScore': 51,
+        'riskReason': '19 days since last transaction. Approaching high risk threshold.',
+        'aiInsight': 'Enjoys sweet pairings with afternoon coffee.',
+        'totalVisits': 3,
+        'totalSpend': 'IDR 145,000',
+      },
+      {
+        'id': 'cust-mock-06',
+        'name': 'Faisal Rahman',
+        'email': 'faisal.rahman@serbuin.com',
+        'phone': '081234567806',
+        'birthDate': '1990-03-15',
+        'bio': 'Corporate manager who holds team huddles at cafe.',
+        'favoriteCategory': 'Artisan Brews',
+        'favoriteItem': 'V60 Single Origin Ethiopian',
+        'stamps': (program.totalStamps * 0.6).round().clamp(1, program.totalStamps - 1),
+        'daysInactive': 25,
+        'riskLevel': 'medium',
+        'churnScore': 64,
+        'riskReason': '25 days inactive after consistent early visits.',
+        'aiInsight': 'High ticket size per visit with strong preference for pour-overs.',
+        'totalVisits': 6,
+        'totalSpend': 'IDR 360,000',
+      },
+      {
+        'id': 'cust-mock-07',
+        'name': 'Gita Savitri',
+        'email': 'gita.savitri@serbuin.com',
+        'phone': '081234567807',
+        'birthDate': '1997-12-05',
+        'bio': 'Creative director & daily morning customer.',
+        'favoriteCategory': 'Espresso & Milk',
+        'favoriteItem': 'Oat Milk Spanish Latte',
+        'stamps': (program.totalStamps * 0.9).round().clamp(1, program.totalStamps - 1),
+        'daysInactive': 2,
+        'riskLevel': 'low',
+        'churnScore': 12,
+        'riskReason': 'Highly active champion member. Visited 2 days ago.',
+        'aiInsight': 'Very loyal customer close to completing reward.',
+        'totalVisits': 9,
+        'totalSpend': 'IDR 405,000',
+      },
+      {
+        'id': 'cust-mock-08',
+        'name': 'Hendra Setiawan',
+        'email': 'hendra.setiawan@serbuin.com',
+        'phone': '081234567808',
+        'birthDate': '1994-08-22',
+        'bio': 'Fitness enthusiast & black coffee drinker.',
+        'favoriteCategory': 'Americano',
+        'favoriteItem': 'Iced Americano Grande',
+        'stamps': (program.totalStamps * 0.4).round().clamp(1, program.totalStamps - 1),
+        'daysInactive': 3,
+        'riskLevel': 'low',
+        'churnScore': 15,
+        'riskReason': 'Regular healthy visit rhythm.',
+        'aiInsight': 'Consistent weekday morning visitor.',
+        'totalVisits': 4,
+        'totalSpend': 'IDR 140,000',
+      },
+      {
+        'id': 'cust-mock-09',
+        'name': 'Indah Permata',
+        'email': 'indah.permata@serbuin.com',
+        'phone': '081234567809',
+        'birthDate': '2002-05-19',
+        'bio': 'Social media creator & brunch lover.',
+        'favoriteCategory': 'Seasonal Specials',
+        'favoriteItem': 'Avocado Toast & Matcha Fusion',
+        'stamps': 2,
+        'daysInactive': 1,
+        'riskLevel': 'low',
+        'churnScore': 10,
+        'riskReason': 'New member with active engagement in the last 24h.',
+        'aiInsight': 'Recently enrolled and highly engaged.',
+        'totalVisits': 2,
+        'totalSpend': 'IDR 110,000',
+      },
+      {
+        'id': 'cust-mock-10',
+        'name': 'Joko Susilo',
+        'email': 'joko.susilo@serbuin.com',
+        'phone': '081234567810',
+        'birthDate': '1988-10-10',
+        'bio': 'Finance analyst working nearby.',
+        'favoriteCategory': 'Traditional Brews',
+        'favoriteItem': 'Kopi Tubruk & Banana Fritter',
+        'stamps': (program.totalStamps * 0.5).round().clamp(1, program.totalStamps - 1),
+        'daysInactive': 4,
+        'riskLevel': 'low',
+        'churnScore': 18,
+        'riskReason': 'Reliable frequent visits.',
+        'aiInsight': 'Appreciates traditional snack pairings.',
+        'totalVisits': 5,
+        'totalSpend': 'IDR 175,000',
+      },
+    ];
+
+    int createdCount = 0;
+
+    for (final p in mockProfiles) {
+      final daysInactive = p['daysInactive'] as int;
+      final totalVisits = p['totalVisits'] as int;
+      final lastStampDate = DateTime.now().subtract(Duration(days: daysInactive));
+      final joinedDate = lastStampDate.subtract(Duration(days: totalVisits * 5));
+      final birthDateStr = p['birthDate'] as String;
+      final bDate = DateTime.tryParse(birthDateStr) ?? DateTime(1995, 1, 1);
+      final age = DateTime.now().year - bDate.year;
+
+      // 1. Create real AppUser in Firestore & local cache so it can be logged in
+      final user = AppUser(
+        id: p['id'] as String,
+        email: p['email'] as String,
+        name: p['name'] as String,
+        role: UserRole.customer,
+        phone: p['phone'] as String,
+        isProfileComplete: true,
+        createdAt: joinedDate,
+        customerProfile: CustomerProfile(
+          phone: p['phone'] as String,
+          birthDate: birthDateStr,
+          bio: p['bio'] as String,
+          favoriteCategory: p['favoriteCategory'] as String,
+        ),
+      );
+
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.id)
+            .set(user.toMap(), SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('Firestore seed user note: $e');
+      }
+
+      // Also cache in local registered users registry
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final regJson = prefs.getString('serbuin_registered_users') ?? '[]';
+        final List list = jsonDecode(regJson);
+        final idx = list.indexWhere((u) => u['id'] == user.id || u['email'] == user.email);
+        if (idx != -1) {
+          list[idx] = user.toMap();
+        } else {
+          list.add(user.toMap());
+        }
+        await prefs.setString('serbuin_registered_users', jsonEncode(list));
+      } catch (_) {}
+
+      // 2. Create MemberRecord in Firestore & memory
+      final memberId = 'mem-${p['id']}-$programId';
+      final member = MemberRecord(
+        id: memberId,
+        programId: programId,
+        programTitle: program.title,
+        merchantId: merchantId,
+        customerId: p['id'] as String,
+        customerName: p['name'] as String,
+        customerEmail: p['email'] as String,
+        customerPhone: p['phone'] as String,
+        stampsCollected: p['stamps'] as int,
+        totalStampsRequired: program.totalStamps,
+        status: 'active',
+        lastStampDate: lastStampDate,
+        joinedDate: joinedDate,
+        riskLevel: p['riskLevel'] as String,
+        churnScore: p['churnScore'] as int,
+        riskReason: p['riskReason'] as String,
+        aiInsight: p['aiInsight'] as String,
+        recommendedVoucher: 'AI Retention Reward Voucher',
+        customerAge: age,
+        favoriteItem: p['favoriteItem'] as String,
+        totalSpend: p['totalSpend'] as String,
+        totalVisits: totalVisits,
+        personalizedVoucherReason:
+            'AI predicted churn probability of ${p['churnScore']}%. Targeted retention offer based on customer favorite ${p['favoriteItem']}.',
+      );
+
+      _members.removeWhere((m) => m.id == member.id || (m.programId == programId && m.customerId == member.customerId));
+      _members.insert(0, member);
+
+      try {
+        await FirebaseFirestore.instance
+            .collection('members')
+            .doc(member.id)
+            .set(member.toMap(), SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('Firestore seed member note: $e');
+      }
+
+      // 3. Create Stamp Earned History Activities in Firestore & memory
+      for (int v = 0; v < totalVisits; v++) {
+        final visitDate = joinedDate.add(Duration(days: (v + 1) * 4));
+        final act = ActivityLog(
+          id: 'act-${p['id']}-$programId-$v',
+          userId: p['id'] as String,
+          type: 'stamp_earned',
+          title: 'Earned +1 Stamp',
+          subtitle: '${v + 1}/${program.totalStamps} stamps on ${program.title}',
+          merchantName: program.merchantName,
+          timestamp: visitDate,
+          stampsCount: 1,
+        );
+
+        _activities.removeWhere((a) => a.id == act.id);
+        _activities.insert(0, act);
+
+        try {
+          await FirebaseFirestore.instance
+              .collection('activities')
+              .doc(act.id)
+              .set(act.toMap(), SetOptions(merge: true));
+        } catch (_) {}
+      }
+
+      createdCount++;
+    }
+
+    // 4. Update program member count
+    final activeCount = _members.where((m) => m.programId == programId && m.status == 'active').length;
+    _programs[progIndex] = program.copyWith(memberCount: activeCount);
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('programs')
+          .doc(program.id)
+          .update({'memberCount': activeCount});
+    } catch (_) {}
+
+    await _saveToStorage();
+    notifyListeners();
+
+    return createdCount;
+  }
+
+  /// Clear mock customer data for a program
+  Future<int> clearMockCustomerData({
+    required String programId,
+  }) async {
+    const mockPrefix = 'cust-mock-';
+    final toRemove = _members.where((m) => m.programId == programId && m.customerId.startsWith(mockPrefix)).toList();
+
+    for (final m in toRemove) {
+      _members.removeWhere((x) => x.id == m.id);
+      _activities.removeWhere((a) => a.userId == m.customerId && a.subtitle.contains(m.programTitle));
+      try {
+        await FirebaseFirestore.instance.collection('members').doc(m.id).delete();
+      } catch (_) {}
+    }
+
+    final pIdx = _programs.indexWhere((p) => p.id == programId);
+    if (pIdx != -1) {
+      final activeCount = _members.where((m) => m.programId == programId && m.status == 'active').length;
+      _programs[pIdx] = _programs[pIdx].copyWith(memberCount: activeCount);
+      try {
+        await FirebaseFirestore.instance.collection('programs').doc(programId).update({'memberCount': activeCount});
+      } catch (_) {}
+    }
+
+    await _saveToStorage();
+    notifyListeners();
+    return toRemove.length;
+  }
+
   String _formatDate(DateTime dt) {
     return '${dt.day}/${dt.month}/${dt.year}';
   }

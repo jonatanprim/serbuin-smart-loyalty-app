@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/gemini_ai_service.dart';
+import '../../services/mock_database_service.dart';
 import '../../theme/app_theme.dart';
 import '../auth/role_selection_view.dart';
 
@@ -25,6 +26,9 @@ class _MerchantProfileViewState extends State<MerchantProfileView> {
   final _geminiKeyController = TextEditingController();
 
   bool _isSaving = false;
+  String? _selectedProgramIdForMock;
+  bool _isGeneratingMock = false;
+  bool _isClearingMock = false;
 
   @override
   void initState() {
@@ -82,6 +86,14 @@ class _MerchantProfileViewState extends State<MerchantProfileView> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final db = context.watch<MockDatabaseService>();
+    final merchantProgs = db.programs.where((p) => p.merchantId == widget.user.id).toList();
+    if (_selectedProgramIdForMock == null && merchantProgs.isNotEmpty) {
+      _selectedProgramIdForMock = merchantProgs.first.id;
+    }
+    final currentProgramMockCount = _selectedProgramIdForMock != null
+        ? db.members.where((m) => m.programId == _selectedProgramIdForMock && m.customerId.startsWith('cust-mock-')).length
+        : 0;
 
     return Scaffold(
       body: SafeArea(
@@ -309,6 +321,233 @@ class _MerchantProfileViewState extends State<MerchantProfileView> {
                       obscureText: true,
                       decoration: const InputDecoration(hintText: 'AIzaSy...'),
                     ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Mock Customer Data & Churn Simulation
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceCard,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.35),
+                    width: 1.5,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.science_rounded, size: 20, color: AppColors.primaryLight),
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Mock Customer Data & Churn Simulation',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Seed test members to experience live churn risk & AI retention vouchers',
+                                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(height: 1, color: AppColors.border),
+                    const SizedBox(height: 14),
+
+                    if (merchantProgs.isEmpty)
+                      const Text(
+                        'Please create at least one loyalty program first before generating mock customer members.',
+                        style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                      )
+                    else ...[
+                      const Text(
+                        'TARGET LOYALTY PROGRAM',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primaryLight, letterSpacing: 0.8),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceLight,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: merchantProgs.any((p) => p.id == _selectedProgramIdForMock)
+                                ? _selectedProgramIdForMock
+                                : merchantProgs.first.id,
+                            isExpanded: true,
+                            dropdownColor: AppColors.surfaceCard,
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70),
+                            items: merchantProgs.map((p) {
+                              return DropdownMenuItem(
+                                value: p.id,
+                                child: Text(
+                                  '${p.title} (${p.category})',
+                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) setState(() => _selectedProgramIdForMock = val);
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Status Info
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceLight,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              currentProgramMockCount > 0 ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+                              size: 18,
+                              color: currentProgramMockCount > 0 ? AppColors.accentEmerald : AppColors.primaryLight,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                currentProgramMockCount > 0
+                                    ? '$currentProgramMockCount mock members active in this program with varied churn risks (High, Med, Low).'
+                                    : 'No mock members generated yet for this program.',
+                                style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Generate Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _isGeneratingMock || _selectedProgramIdForMock == null
+                              ? null
+                              : () async {
+                                  final messenger = ScaffoldMessenger.of(context);
+                                  setState(() => _isGeneratingMock = true);
+                                  final count = await db.generateMockCustomerData(
+                                    merchantId: widget.user.id,
+                                    programId: _selectedProgramIdForMock!,
+                                  );
+                                  setState(() => _isGeneratingMock = false);
+
+                                  if (mounted) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Row(
+                                          children: [
+                                            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                'Generated $count mock customers with High, Medium & Low churn risk! Open Members tab to test AI Vouchers.',
+                                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        backgroundColor: AppColors.accentEmerald,
+                                        behavior: SnackBarBehavior.floating,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                        duration: const Duration(seconds: 4),
+                                      ),
+                                    );
+                                  }
+                                },
+                          icon: _isGeneratingMock
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                )
+                              : const Icon(Icons.auto_awesome_rounded, size: 18),
+                          label: Text(
+                            _isGeneratingMock
+                                ? 'Generating Mock Members...'
+                                : 'Generate 10 Mock Members & History',
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.accentEmerald,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                        ),
+                      ),
+
+                      if (currentProgramMockCount > 0) ...[
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _isClearingMock
+                                ? null
+                                : () async {
+                                    final messenger = ScaffoldMessenger.of(context);
+                                    setState(() => _isClearingMock = true);
+                                    final cleared = await db.clearMockCustomerData(
+                                      programId: _selectedProgramIdForMock!,
+                                    );
+                                    setState(() => _isClearingMock = false);
+
+                                    if (mounted) {
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text('Cleared $cleared mock members.'),
+                                          backgroundColor: AppColors.surfaceLight,
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                        ),
+                                      );
+                                    }
+                                  },
+                            icon: _isClearingMock
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.delete_sweep_rounded, size: 18),
+                            label: Text(
+                              _isClearingMock ? 'Clearing...' : 'Clear Mock Members from Program',
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.accentRose,
+                              side: BorderSide(color: AppColors.accentRose.withValues(alpha: 0.5)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ],
                 ),
               ),
