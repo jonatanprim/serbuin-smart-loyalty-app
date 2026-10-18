@@ -38,105 +38,47 @@
   <!-- ZXing Barcode & QR library UMD bundle directly loaded for instant, reliable scanning -->
   <script id="mobile-scanner-barcode-reader" src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 
-  <!-- iOS Safari and Chrome WebKit inline camera playback rules (iOS ONLY) -->
+  <!-- Inline camera playback rules for mobile browsers (iOS & Android) -->
   <script>
     (function() {
-      // ONLY execute on iOS (iPhone / iPad / iPod) to prevent interfering with Android / desktop
-      var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      if (!isIOS) return;
-
-      function setupVideo(v) {
-        if (!v) return;
+      function makeVideoInline(el) {
+        if (!el || el.__inline_done) return;
+        el.__inline_done = true;
         try {
-          v.setAttribute('playsinline', '');
-          v.setAttribute('webkit-playsinline', '');
-          v.setAttribute('muted', '');
-          v.setAttribute('autoplay', '');
-          v.playsInline = true;
-          v.webkitPlaysInline = true;
-          v.muted = true;
-          v.defaultMuted = true;
-          v.autoplay = true;
+          el.setAttribute('playsinline', '');
+          el.setAttribute('webkit-playsinline', '');
+          el.setAttribute('muted', '');
+          el.setAttribute('autoplay', '');
+          el.playsInline = true;
+          el.webkitPlaysInline = true;
+          el.muted = true;
+          el.defaultMuted = true;
+          el.autoplay = true;
         } catch (_) {}
       }
 
-      // 1. Hook document.createElement to intercept video element creation
+      // Safe creation interceptor: ensures every <video> is created with inline attributes
       try {
         var origCreate = document.createElement.bind(document);
-        document.createElement = function(tagName, options) {
-          var el = origCreate(tagName, options);
-          if (tagName && String(tagName).toLowerCase() === 'video') {
-            setupVideo(el);
+        document.createElement = function(tag, opts) {
+          var el = origCreate(tag, opts);
+          if (tag && String(tag).toLowerCase() === 'video') {
+            makeVideoInline(el);
           }
           return el;
         };
       } catch (_) {}
 
-      // 2. Hook HTMLMediaElement.prototype.play
-      try {
-        if (window.HTMLMediaElement && HTMLMediaElement.prototype.play) {
-          var origPlay = HTMLMediaElement.prototype.play;
-          HTMLMediaElement.prototype.play = function() {
-            setupVideo(this);
-            return origPlay.apply(this, arguments);
-          };
+      // Capture loadedmetadata to ensure inline playback
+      window.addEventListener('loadedmetadata', function(e) {
+        if (e.target && e.target.tagName === 'VIDEO') {
+          makeVideoInline(e.target);
+          try {
+            var p = e.target.play();
+            if (p && p.catch) p.catch(function() {});
+          } catch (_) {}
         }
-      } catch (_) {}
-
-      // 3. Hook srcObject setter
-      try {
-        var desc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'srcObject');
-        if (desc && desc.set) {
-          var origSet = desc.set;
-          Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', {
-            get: desc.get,
-            set: function(stream) {
-              setupVideo(this);
-              var res = origSet.call(this, stream);
-              var self = this;
-              if (stream) {
-                setTimeout(function() {
-                  setupVideo(self);
-                  try {
-                    var p = self.play();
-                    if (p && p.catch) p.catch(function() {});
-                  } catch (_) {}
-                }, 50);
-              }
-              return res;
-            },
-            configurable: true,
-            enumerable: true
-          });
-        }
-      } catch (_) {}
-
-      // 4. Polling loop to scan both standard DOM and all ShadowRoots (Flutter flt-glass-pane)
-      function fixAllVideosInSubtree(root) {
-        if (!root) return;
-        try {
-          if (root.querySelectorAll) {
-            var vids = root.querySelectorAll('video');
-            for (var i = 0; i < vids.length; i++) {
-              setupVideo(vids[i]);
-              if (vids[i].paused && vids[i].srcObject) {
-                try { vids[i].play(); } catch (_) {}
-              }
-            }
-            var allNodes = root.querySelectorAll('*');
-            for (var j = 0; j < allNodes.length; j++) {
-              if (allNodes[j].shadowRoot) {
-                fixAllVideosInSubtree(allNodes[j].shadowRoot);
-              }
-            }
-          }
-        } catch (_) {}
-      }
-
-      setInterval(function() {
-        fixAllVideosInSubtree(document);
-      }, 500);
+      }, true);
     })();
   </script>
 </head>

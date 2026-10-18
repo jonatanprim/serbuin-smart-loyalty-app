@@ -20,7 +20,6 @@ class MerchantScanView extends StatefulWidget {
 
 class _MerchantScanViewState extends State<MerchantScanView> {
   late final MobileScannerController _scannerController;
-  StreamSubscription<BarcodeCapture>? _scannerSubscription;
   bool _isProcessing = false;
   String? _selectedProgramId;
   String? _lastScannedCode;
@@ -43,28 +42,6 @@ class _MerchantScanViewState extends State<MerchantScanView> {
       );
     });
 
-    final isIOSWeb = kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
-    if (isIOSWeb) {
-      _scannerSubscription = _scannerController.barcodes.listen((capture) {
-        if (_isProcessing) return;
-        final List<Barcode> barcodes = capture.barcodes;
-        if (barcodes.isNotEmpty) {
-          final String? code = barcodes.first.rawValue;
-          if (code != null && code.isNotEmpty) {
-            if (_lastScannedCode == code &&
-                _lastScannedTime != null &&
-                DateTime.now().difference(_lastScannedTime!).inSeconds < 2) {
-              return;
-            }
-            _lastScannedCode = code;
-            _lastScannedTime = DateTime.now();
-            _handleScanOrInput(code);
-          }
-        }
-      });
-      unawaited(_scannerController.start());
-    }
-
     final db = context.read<MockDatabaseService>();
     final merchantProgs = db.programs.where((p) => p.merchantId == widget.merchantId).toList();
     if (merchantProgs.isNotEmpty) {
@@ -74,7 +51,6 @@ class _MerchantScanViewState extends State<MerchantScanView> {
 
   @override
   void dispose() {
-    _scannerSubscription?.cancel();
     _scannerController.dispose();
     super.dispose();
   }
@@ -1190,8 +1166,6 @@ class _MerchantScanViewState extends State<MerchantScanView> {
 
   @override
   Widget build(BuildContext context) {
-    final isIOSWeb = kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
@@ -1200,44 +1174,28 @@ class _MerchantScanViewState extends State<MerchantScanView> {
         children: [
           // 1. Fullscreen Camera Scanner Feed
           Positioned.fill(
-            child: isIOSWeb
-                ? ValueListenableBuilder<MobileScannerState>(
-                    valueListenable: _scannerController,
-                    builder: (context, state, _) {
-                      if (!state.isInitialized) {
-                        return _buildPlaceholder();
-                      }
-                      if (state.error != null) {
-                        return _buildError(state.error!);
-                      }
-                      // Direct Web view: HtmlElementView fills area without FittedBox 0x0 collapse on iOS
-                      return SizedBox.expand(
-                        child: _scannerController.buildCameraView(),
-                      );
-                    },
-                  )
-                : MobileScanner(
-                    controller: _scannerController,
-                    onDetect: (capture) {
-                      if (_isProcessing) return;
-                      final List<Barcode> barcodes = capture.barcodes;
-                      if (barcodes.isNotEmpty) {
-                        final String? code = barcodes.first.rawValue;
-                        if (code != null && code.isNotEmpty) {
-                          if (_lastScannedCode == code &&
-                              _lastScannedTime != null &&
-                              DateTime.now().difference(_lastScannedTime!).inSeconds < 2) {
-                            return;
-                          }
-                          _lastScannedCode = code;
-                          _lastScannedTime = DateTime.now();
-                          _handleScanOrInput(code);
-                        }
-                      }
-                    },
-                    placeholderBuilder: (context) => _buildPlaceholder(),
-                    errorBuilder: (context, error) => _buildError(error),
-                  ),
+            child: MobileScanner(
+              controller: _scannerController,
+              onDetect: (capture) {
+                if (_isProcessing) return;
+                final List<Barcode> barcodes = capture.barcodes;
+                if (barcodes.isNotEmpty) {
+                  final String? code = barcodes.first.rawValue;
+                  if (code != null && code.isNotEmpty) {
+                    if (_lastScannedCode == code &&
+                        _lastScannedTime != null &&
+                        DateTime.now().difference(_lastScannedTime!).inSeconds < 2) {
+                      return;
+                    }
+                    _lastScannedCode = code;
+                    _lastScannedTime = DateTime.now();
+                    _handleScanOrInput(code);
+                  }
+                }
+              },
+              placeholderBuilder: (context) => _buildPlaceholder(),
+              errorBuilder: (context, error) => _buildError(error),
+            ),
           ),
 
           // 2. Translucent Vignette Mask & Scanning Frame Overlay
