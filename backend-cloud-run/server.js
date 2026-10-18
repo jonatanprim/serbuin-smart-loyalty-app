@@ -37,12 +37,16 @@ try {
   console.log('Firebase Admin optional note:', e.message);
 }
 
+// Active Gemini Flash Model (gemini-3.8-flash is Google's active current production model)
+const PRIMARY_GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+
 // Health check endpoint for Cloud Run
 app.get(['/', '/api/health'], (req, res) => {
   res.json({
     status: 'healthy',
     service: 'Serbuin Smart Loyalty Cloud Run Backend',
-    version: '1.0.0',
+    version: '1.1.0',
+    geminiModel: PRIMARY_GEMINI_MODEL,
     projectId: PROJECT_ID,
     projectNumber: PROJECT_NUMBER,
     hasGeminiKey: Boolean(GEMINI_API_KEY),
@@ -52,14 +56,10 @@ app.get(['/', '/api/health'], (req, res) => {
 });
 
 /**
- * Helper to call Gemini REST API securely
+ * Helper to call Gemini REST API securely with model fallback
  */
-async function callGemini(promptText, isJson = true) {
+function attemptGeminiModel(model, promptText, isJson = true) {
   return new Promise((resolve, reject) => {
-    if (!GEMINI_API_KEY) {
-      return reject(new Error('GEMINI_API_KEY is not configured on Cloud Run.'));
-    }
-
     const payload = JSON.stringify({
       contents: [
         {
@@ -75,7 +75,7 @@ async function callGemini(promptText, isJson = true) {
     const options = {
       hostname: 'generativelanguage.googleapis.com',
       port: 443,
-      path: `/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`,
+      path: `/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -93,7 +93,7 @@ async function callGemini(promptText, isJson = true) {
             const rawText = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
             resolve(isJson ? JSON.parse(rawText) : rawText);
           } else {
-            console.error('Gemini API Error Response:', parsed);
+            console.warn(`Gemini (${model}) returned HTTP ${resp.statusCode}:`, parsed.error?.message || data.slice(0, 150));
             reject(new Error(parsed.error?.message || `HTTP ${resp.statusCode}`));
           }
         } catch (err) {
@@ -106,6 +106,32 @@ async function callGemini(promptText, isJson = true) {
     req.write(payload);
     req.end();
   });
+}
+
+async function callGemini(promptText, isJson = true) {
+  if (!GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is not configured on Cloud Run.');
+  }
+
+  const candidateModels = [
+    PRIMARY_GEMINI_MODEL,
+    'gemini-3.8-flash',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+  ].filter((v, i, a) => a.indexOf(v) === i);
+
+  let lastError = null;
+  for (const model of candidateModels) {
+    try {
+      const data = await attemptGeminiModel(model, promptText, isJson);
+      return { data, model };
+    } catch (err) {
+      console.warn(`Model ${model} unavailable, trying next candidate:`, err.message);
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error('All candidate Gemini models failed.');
 }
 
 /**
@@ -144,10 +170,10 @@ Output strictly a single JSON object with these keys:
 `;
 
   try {
-    const aiResult = await callGemini(promptText, true);
+    const { data: aiResult, model } = await callGemini(promptText, true);
     return res.json({
       success: true,
-      source: 'gemini-1.5-flash',
+      source: model,
       data: aiResult,
     });
   } catch (err) {
@@ -202,10 +228,10 @@ Output strictly a JSON object:
 `;
 
   try {
-    const aiResult = await callGemini(promptText, true);
+    const { data: aiResult, model } = await callGemini(promptText, true);
     return res.json({
       success: true,
-      source: 'gemini-1.5-flash',
+      source: model,
       data: aiResult,
     });
   } catch (err) {

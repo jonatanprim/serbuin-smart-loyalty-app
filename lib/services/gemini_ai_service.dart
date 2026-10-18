@@ -68,8 +68,8 @@ class GeminiAiService {
   static final GeminiAiService _instance = GeminiAiService._internal();
   factory GeminiAiService() => _instance;
   GeminiAiService._internal() {
-    // Pre-configured with submission Gemini API key
-    _apiKey = 'AQ.Ab8RN6JpgjFHpvfeK2HelMrcVJNt9V_olUftdlX1Btw30u1qeg';
+    // API keys are never hardcoded in client. All AI calls route securely through Cloud Run backend.
+    _apiKey = null;
   }
 
   String? _apiKey;
@@ -209,7 +209,7 @@ class GeminiAiService {
     String? programGoal,
   }) async {
     final url = Uri.parse(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$_apiKey',
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=$_apiKey',
     );
 
     final promptText = '''
@@ -284,7 +284,7 @@ Output strictly a single JSON object with these keys:
     required String programTitle,
   }) async {
     final url = Uri.parse(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$_apiKey',
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=$_apiKey',
     );
 
     final promptText = '''
@@ -465,7 +465,6 @@ Output strictly a JSON object:
     final hasAge = customerAge != null && customerAge > 0;
     final ageText = hasAge ? ' (Age $customerAge)' : '';
     final hasItem = favoriteItem != null && favoriteItem.trim().isNotEmpty;
-    final hasSpend = totalSpend != null && totalSpend.trim().isNotEmpty;
     final hasVisits = totalVisits != null && totalVisits > 0;
     final visitsCount = hasVisits ? totalVisits : stampsCollected;
 
@@ -492,14 +491,10 @@ Output strictly a JSON object:
       }
 
       final String whyRecommendedForMerchant;
-      if (hasSpend && hasItem) {
+      if (hasItem) {
         final prefix = hasAge ? 'Customer$ageText' : 'Customer $customerName';
         whyRecommendedForMerchant =
-            '$prefix generated $totalSpend across $visitsCount visits with a recorded preference for "$favoriteItem". Offering 35% on their proven favorite minimizes discount waste while delivering an irresistible incentive that restores their regular visit routine.';
-      } else if (hasItem) {
-        final prefix = hasAge ? 'Customer$ageText' : 'Customer $customerName';
-        whyRecommendedForMerchant =
-            '$prefix has a recorded preference for "$favoriteItem" across $visitsCount visits. Offering a targeted 35% voucher directly on their favorite category maximizes redemption likelihood while restoring their regular habit.';
+            '$prefix has completed $visitsCount visits with a recorded preference for "$favoriteItem". Offering 35% on their proven favorite minimizes discount waste while delivering an irresistible incentive that restores their regular visit routine.';
       } else {
         final progressPct = totalStamps > 0 ? ((stampsCollected / totalStamps) * 100).round() : 0;
         whyRecommendedForMerchant =

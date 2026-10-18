@@ -110,12 +110,16 @@ class AuthProvider extends ChangeNotifier {
     return null;
   }
 
+  String? _authError;
+  String? get authError => _authError;
+
   Future<bool> login({
     required String email,
     required String password,
     required UserRole role,
   }) async {
     _isLoading = true;
+    _authError = null;
     notifyListeners();
 
     await Future.delayed(const Duration(milliseconds: 400));
@@ -124,9 +128,23 @@ class AuthProvider extends ChangeNotifier {
     final existingUser = await _findInUserRegistry(cleanEmail, role);
 
     if (existingUser != null) {
-      _currentUser = existingUser;
+      // Check password in Firestore User Registry
+      if (existingUser.password != null && existingUser.password!.isNotEmpty) {
+        if (existingUser.password != password) {
+          _isLoading = false;
+          _authError = 'Incorrect password. Please verify your credentials.';
+          notifyListeners();
+          return false;
+        }
+        _currentUser = existingUser;
+      } else {
+        // Pre-seeded or mock account: bind the entered password in the registry
+        final updatedUser = existingUser.copyWith(password: password);
+        await _saveToUserRegistry(updatedUser);
+        _currentUser = updatedUser;
+      }
     } else {
-      // Create user session with their real entered credentials
+      // Create user session with their real entered credentials in the Firestore registry
       final emailPrefix = cleanEmail.split('@').first;
       final displayName = emailPrefix.isNotEmpty
           ? emailPrefix[0].toUpperCase() + emailPrefix.substring(1)
@@ -137,6 +155,7 @@ class AuthProvider extends ChangeNotifier {
         id: id,
         name: displayName,
         email: cleanEmail,
+        password: password,
         role: role,
         isProfileComplete: true,
         merchantProfile: role == UserRole.merchant
@@ -175,6 +194,7 @@ class AuthProvider extends ChangeNotifier {
     String? phone,
   }) async {
     _isLoading = true;
+    _authError = null;
     notifyListeners();
 
     await Future.delayed(const Duration(milliseconds: 500));
@@ -187,6 +207,7 @@ class AuthProvider extends ChangeNotifier {
       id: id,
       name: cleanName,
       email: cleanEmail,
+      password: password,
       role: role,
       phone: phone ?? '',
       isProfileComplete: true,

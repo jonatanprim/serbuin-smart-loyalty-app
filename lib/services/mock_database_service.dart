@@ -1242,7 +1242,6 @@ class MockDatabaseService extends ChangeNotifier {
         'riskReason': '42 days without visit despite being close to reward unlocking.',
         'aiInsight': 'High engagement history now at immediate risk of churn.',
         'totalVisits': 7,
-        'totalSpend': 'IDR 315,000',
       },
       {
         'id': 'cust-mock-02',
@@ -1260,7 +1259,6 @@ class MockDatabaseService extends ChangeNotifier {
         'riskReason': 'High risk: 48 days inactive with high stamp progress.',
         'aiInsight': 'Very high lifetime value customer at urgent churn risk.',
         'totalVisits': 8,
-        'totalSpend': 'IDR 420,000',
       },
       {
         'id': 'cust-mock-03',
@@ -1278,7 +1276,6 @@ class MockDatabaseService extends ChangeNotifier {
         'riskReason': 'Inactivity exceeded 5 weeks after reaching halfway mark.',
         'aiInsight': 'Responds strongly to student discounts and afternoon treats.',
         'totalVisits': 5,
-        'totalSpend': 'IDR 195,000',
       },
       {
         'id': 'cust-mock-04',
@@ -1296,7 +1293,6 @@ class MockDatabaseService extends ChangeNotifier {
         'riskReason': 'Visit cadence dropped from weekly to zero visits in 3 weeks.',
         'aiInsight': 'Moderate churn risk. A timely reminder offer will re-engage.',
         'totalVisits': 4,
-        'totalSpend': 'IDR 180,000',
       },
       {
         'id': 'cust-mock-05',
@@ -1314,7 +1310,6 @@ class MockDatabaseService extends ChangeNotifier {
         'riskReason': '19 days since last transaction. Approaching high risk threshold.',
         'aiInsight': 'Enjoys sweet pairings with afternoon coffee.',
         'totalVisits': 3,
-        'totalSpend': 'IDR 145,000',
       },
       {
         'id': 'cust-mock-06',
@@ -1332,7 +1327,6 @@ class MockDatabaseService extends ChangeNotifier {
         'riskReason': '25 days inactive after consistent early visits.',
         'aiInsight': 'High ticket size per visit with strong preference for pour-overs.',
         'totalVisits': 6,
-        'totalSpend': 'IDR 360,000',
       },
       {
         'id': 'cust-mock-07',
@@ -1350,7 +1344,6 @@ class MockDatabaseService extends ChangeNotifier {
         'riskReason': 'Highly active champion member. Visited 2 days ago.',
         'aiInsight': 'Very loyal customer close to completing reward.',
         'totalVisits': 9,
-        'totalSpend': 'IDR 405,000',
       },
       {
         'id': 'cust-mock-08',
@@ -1368,7 +1361,6 @@ class MockDatabaseService extends ChangeNotifier {
         'riskReason': 'Regular healthy visit rhythm.',
         'aiInsight': 'Consistent weekday morning visitor.',
         'totalVisits': 4,
-        'totalSpend': 'IDR 140,000',
       },
       {
         'id': 'cust-mock-09',
@@ -1386,7 +1378,6 @@ class MockDatabaseService extends ChangeNotifier {
         'riskReason': 'New member with active engagement in the last 24h.',
         'aiInsight': 'Recently enrolled and highly engaged.',
         'totalVisits': 2,
-        'totalSpend': 'IDR 110,000',
       },
       {
         'id': 'cust-mock-10',
@@ -1404,7 +1395,6 @@ class MockDatabaseService extends ChangeNotifier {
         'riskReason': 'Reliable frequent visits.',
         'aiInsight': 'Appreciates traditional snack pairings.',
         'totalVisits': 5,
-        'totalSpend': 'IDR 175,000',
       },
     ];
 
@@ -1482,7 +1472,7 @@ class MockDatabaseService extends ChangeNotifier {
         recommendedVoucher: 'AI Retention Reward Voucher',
         customerAge: age,
         favoriteItem: p['favoriteItem'] as String,
-        totalSpend: p['totalSpend'] as String,
+        totalSpend: null,
         totalVisits: totalVisits,
         personalizedVoucherReason:
             'AI predicted churn probability of ${p['churnScore']}%. Targeted retention offer based on customer favorite ${p['favoriteItem']}.',

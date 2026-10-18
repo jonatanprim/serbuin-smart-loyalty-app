@@ -40,6 +40,7 @@ class AppUser {
   final DateTime createdAt;
   final MerchantProfile? merchantProfile;
   final CustomerProfile? customerProfile;
+  final String? password;
 
   AppUser({
     required this.id,
@@ -52,6 +53,7 @@ class AppUser {
     DateTime? createdAt,
     this.merchantProfile,
     this.customerProfile,
+    this.password,
   }) : createdAt = createdAt ?? DateTime.now();
 
   AppUser copyWith({
@@ -65,6 +67,7 @@ class AppUser {
     DateTime? createdAt,
     MerchantProfile? merchantProfile,
     CustomerProfile? customerProfile,
+    String? password,
   }) {
     return AppUser(
       id: id ?? this.id,
@@ -77,6 +80,7 @@ class AppUser {
       createdAt: createdAt ?? this.createdAt,
       merchantProfile: merchantProfile ?? this.merchantProfile,
       customerProfile: customerProfile ?? this.customerProfile,
+      password: password ?? this.password,
     );
   }
 
@@ -92,6 +96,7 @@ class AppUser {
       'createdAt': createdAt.toIso8601String(),
       'merchantProfile': merchantProfile?.toMap(),
       'customerProfile': customerProfile?.toMap(),
+      'password': password,
     };
   }
 
@@ -111,6 +116,7 @@ class AppUser {
       customerProfile: map['customerProfile'] != null
           ? CustomerProfile.fromMap(map['customerProfile'])
           : null,
+      password: map['password'] is String ? map['password'] : null,
     );
   }
 }

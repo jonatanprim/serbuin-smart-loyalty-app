@@ -77,8 +77,8 @@ class _LoginViewState extends State<LoginView> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Login failed. Please check your credentials and try again.'),
+          SnackBar(
+            content: Text(auth.authError ?? 'Login failed. Please check your credentials and try again.'),
             backgroundColor: AppColors.accentRose,
           ),
         );
@@ -120,7 +120,31 @@ class _LoginViewState extends State<LoginView> {
                 'Sign in to your ${_selectedRole == UserRole.merchant ? "Merchant" : "Customer"} account',
                 style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.28)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.cloud_done_rounded, size: 13, color: AppColors.primaryLight),
+                    SizedBox(width: 6),
+                    Text(
+                      'Firestore-Based User Registry',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primaryLight,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
 
               // Role toggle tabs
               Container(
@@ -191,7 +215,12 @@ class _LoginViewState extends State<LoginView> {
                   hintText: 'Enter your password',
                 ),
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 6),
+              const Text(
+                'Verified against Cloud Firestore user registry. Pre-seeded demo accounts accept initial password verification.',
+                style: TextStyle(fontSize: 10.5, color: AppColors.textMuted, fontStyle: FontStyle.italic),
+              ),
+              const SizedBox(height: 24),
 
               // Login Button
               SizedBox(

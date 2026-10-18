@@ -888,7 +888,6 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
   late ChurnAnalysisResult _analysis;
   int? _resolvedAge;
   String? _resolvedFavorite;
-  String? _resolvedSpend;
   int? _resolvedVisits;
 
   @override
@@ -897,10 +896,9 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
     final m = widget.member;
     _resolvedAge = m.customerAge;
     _resolvedFavorite = m.favoriteItem;
-    _resolvedSpend = m.totalSpend;
     _resolvedVisits = m.totalVisits ?? (m.stampsCollected > 0 ? m.stampsCollected : null);
 
-    // Initial analysis strictly using real verified data (no dummy fallbacks)
+    // Initial analysis strictly using real verified visit and preference data (no transaction amount data)
     _analysis = GeminiAiService().generateLocalChurnAnalysis(
       customerName: m.customerName,
       stampsCollected: m.stampsCollected,
@@ -909,7 +907,6 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
       programTitle: m.programTitle,
       customerAge: _resolvedAge,
       favoriteItem: _resolvedFavorite,
-      totalSpend: _resolvedSpend,
       totalVisits: _resolvedVisits,
     );
 
@@ -969,7 +966,6 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
           programTitle: m.programTitle,
           customerAge: _resolvedAge,
           favoriteItem: _resolvedFavorite,
-          totalSpend: _resolvedSpend,
           totalVisits: _resolvedVisits,
         );
       });
@@ -1094,7 +1090,7 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
                         const Icon(Icons.verified_user_rounded, size: 13, color: AppColors.primaryLight),
                         const SizedBox(width: 6),
                         Text(
-                          (_resolvedAge != null || _resolvedFavorite != null || _resolvedSpend != null)
+                          (_resolvedAge != null || _resolvedFavorite != null)
                               ? 'VERIFIED CUSTOMER PROFILE & HISTORY'
                               : 'VERIFIED LOYALTY CARD ACTIVITY',
                           style: const TextStyle(
@@ -1119,7 +1115,7 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
                             label: '$_resolvedVisits visit${_resolvedVisits! > 1 ? 's' : ''}',
                           ),
                         _DemographicPill(
-                          icon: Icons.schedule_rounded,
+                           icon: Icons.schedule_rounded,
                           label: daysInactive == 0 ? 'Active today' : '$daysInactive days absent',
                         ),
                         _DemographicPill(
@@ -1128,7 +1124,7 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
                         ),
                       ],
                     ),
-                    if (_resolvedFavorite != null || _resolvedSpend != null) ...[
+                    if (_resolvedFavorite != null) ...[
                       const SizedBox(height: 10),
                       Row(
                         children: [
@@ -1136,10 +1132,7 @@ class _MemberAiDetailModalState extends State<_MemberAiDetailModal> {
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
-                              [
-                                if (_resolvedFavorite != null) 'Favorite: $_resolvedFavorite',
-                                if (_resolvedSpend != null) 'Spend: $_resolvedSpend',
-                              ].join(' • '),
+                              'Favorite: $_resolvedFavorite',
                               style: const TextStyle(fontSize: 11.5, color: Colors.white, fontWeight: FontWeight.w600),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,

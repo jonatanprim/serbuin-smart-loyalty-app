@@ -16,10 +16,20 @@ class CloudRunService {
 
   String get baseUrl => _baseUrl;
 
+  Uri _resolveUrl(String path) {
+    if (_baseUrl.isNotEmpty) {
+      return Uri.parse('$_baseUrl$path');
+    }
+    if (kIsWeb) {
+      return Uri.parse(path);
+    }
+    return Uri.parse('https://serbuin-backend-398979153007.us-central1.run.app$path');
+  }
+
   /// Check health of Cloud Run service
   Future<Map<String, dynamic>?> checkHealth() async {
     try {
-      final url = Uri.parse(_baseUrl.isEmpty ? '/api/health' : '$_baseUrl/api/health');
+      final url = _resolveUrl('/api/health');
       final resp = await http.get(url).timeout(const Duration(seconds: 4));
       if (resp.statusCode == 200) {
         return jsonDecode(resp.body);
@@ -38,9 +48,7 @@ class CloudRunService {
     String? programGoal,
   }) async {
     try {
-      final url = Uri.parse(
-        _baseUrl.isEmpty ? '/api/ai/generate-program' : '$_baseUrl/api/ai/generate-program',
-      );
+      final url = _resolveUrl('/api/ai/generate-program');
       final resp = await http
           .post(
             url,
@@ -75,9 +83,7 @@ class CloudRunService {
     required String programTitle,
   }) async {
     try {
-      final url = Uri.parse(
-        _baseUrl.isEmpty ? '/api/ai/scan-churn' : '$_baseUrl/api/ai/scan-churn',
-      );
+      final url = _resolveUrl('/api/ai/scan-churn');
       final resp = await http
           .post(
             url,
@@ -111,9 +117,7 @@ class CloudRunService {
     required String body,
   }) async {
     try {
-      final url = Uri.parse(
-        _baseUrl.isEmpty ? '/api/notifications/send-fcm' : '$_baseUrl/api/notifications/send-fcm',
-      );
+      final url = _resolveUrl('/api/notifications/send-fcm');
       final resp = await http
           .post(
             url,

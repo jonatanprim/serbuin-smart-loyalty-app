@@ -25,6 +25,7 @@ class _CustomerHomeViewState extends State<CustomerHomeView> {
   String? _lastStampedCardId;
   final Set<String> _previouslyRedeemedVouchers = {};
   bool _isFirstVoucherCheck = true;
+  final bool _showJoinMorePrograms = false;
 
   @override
   void dispose() {
@@ -545,8 +546,8 @@ class _CustomerHomeViewState extends State<CustomerHomeView> {
 
               const SizedBox(height: 28),
 
-              // Available Programs to Join Section
-              if (joinablePrograms.isNotEmpty) ...[
+              // Available Programs to Join Section (Hidden for now as requested)
+              if (_showJoinMorePrograms && joinablePrograms.isNotEmpty) ...[
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [

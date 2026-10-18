@@ -5,6 +5,9 @@
 *.swp
 .DS_Store
 .firebase/
+.env
+.env.*
+*.env
 .atom/
 .build/
 .buildlog/
