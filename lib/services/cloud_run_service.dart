@@ -20,9 +20,6 @@ class CloudRunService {
     if (_baseUrl.isNotEmpty) {
       return Uri.parse('$_baseUrl$path');
     }
-    if (kIsWeb) {
-      return Uri.parse(path);
-    }
     return Uri.parse('https://serbuin-backend-398979153007.us-central1.run.app$path');
   }
 
