@@ -6,6 +6,7 @@ import '../../theme/app_theme.dart';
 import 'merchant_create_program_view.dart';
 import 'merchant_profile_view.dart';
 import 'merchant_program_detail_view.dart';
+import '../../widgets/stacked_card_wallet.dart';
 
 class MerchantHomeView extends StatelessWidget {
   final AppUser user;
@@ -310,22 +311,17 @@ class MerchantHomeView extends StatelessWidget {
                   ),
                 )
               else
-                ...programs.map((prog) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: _ProgramCardItem(
-                      program: prog,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => MerchantProgramDetailView(program: prog),
-                          ),
-                        );
-                      },
-                    ),
-                  );
-                }),
+                StackedCardWallet(
+                  cards: programs,
+                  onCardTap: (prog) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MerchantProgramDetailView(program: prog),
+                      ),
+                    );
+                  },
+                ),
 
               const SizedBox(height: 20),
 
@@ -406,90 +402,6 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _ProgramCardItem extends StatelessWidget {
-  final LoyaltyProgram program;
-  final VoidCallback onTap;
-
-  const _ProgramCardItem({required this.program, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceCard,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                gradient: AppColors.gradientFromHex(program.gradientColors),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 28),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceLight,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          program.category,
-                          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      if (program.isActive)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.accentEmerald.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Text(
-                            'ACTIVE',
-                            style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: AppColors.accentEmerald),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    program.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${program.totalStamps} Stamps • ${program.memberCount} Members enrolled',
-                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textMuted),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _MerchantActivityTile extends StatelessWidget {
   final ActivityLog activity;
