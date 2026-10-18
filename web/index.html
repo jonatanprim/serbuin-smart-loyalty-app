@@ -38,9 +38,14 @@
   <!-- ZXing Barcode & QR library UMD bundle directly loaded for instant, reliable scanning -->
   <script id="mobile-scanner-barcode-reader" src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 
-  <!-- iOS Safari and Chrome WebKit inline camera playback rules -->
+  <!-- iOS Safari and Chrome WebKit inline camera playback rules (iOS ONLY) -->
   <script>
     (function() {
+      // ONLY execute on iOS (iPhone / iPad / iPod) to prevent interfering with Android / desktop
+      var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (!isIOS) return;
+
       function setupVideo(v) {
         if (!v) return;
         try {
