@@ -61,7 +61,7 @@ class _MerchantScanViewState extends State<MerchantScanView> {
 
     if (result != null && result['phone'] != null && result['phone']!.isNotEmpty) {
       _lastScannedCode = null;
-      _handleScanOrInput(result['phone']!, providedName: result['name']);
+      _handleScanOrInput(result['phone']!);
     }
   }
 
@@ -1165,28 +1165,62 @@ class _MerchantScanViewState extends State<MerchantScanView> {
             placeholderBuilder: (context) => ColoredBox(
               color: Colors.black,
               child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                child: SizedBox(
+                  width: 240,
+                  height: 240,
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const CircularProgressIndicator(color: AppColors.primaryLight),
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceLight.withValues(alpha: 0.85),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.primaryLight.withValues(alpha: 0.4),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.25),
+                              blurRadius: 16,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: const Center(
+                          child: SizedBox(
+                            width: 26,
+                            height: 26,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: AppColors.primaryLight,
+                            ),
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 16),
                       const Text(
-                        'Starting camera...\nAllow camera access if your browser asks.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                        'Starting Camera...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.3,
+                        ),
                       ),
-                      const SizedBox(height: 20),
-                      OutlinedButton.icon(
-                        onPressed: _showInputManualSheet,
-                        icon: const Icon(Icons.dialpad_rounded, size: 18),
-                        label: const Text('Input Phone Number Manually'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.8)),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      const SizedBox(height: 6),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          'Allow camera access if prompted by your browser',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 11,
+                            height: 1.3,
+                          ),
                         ),
                       ),
                     ],
@@ -1379,7 +1413,7 @@ class _MerchantScanViewState extends State<MerchantScanView> {
   }
 }
 
-/// Bottom Sheet for Manual Phone Input
+/// Bottom Sheet for Manual Phone or Voucher Input
 class _InputManualBottomSheet extends StatefulWidget {
   const _InputManualBottomSheet();
 
@@ -1389,44 +1423,17 @@ class _InputManualBottomSheet extends StatefulWidget {
 
 class _InputManualBottomSheetState extends State<_InputManualBottomSheet> {
   final _phoneController = TextEditingController();
-  final _nameController = TextEditingController();
-  List<Map<String, String>> _registeredCustomers = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadCustomers();
-  }
-
-  Future<void> _loadCustomers() async {
-    final db = context.read<MockDatabaseService>();
-    final customers = await db.getAllRegisteredCustomers();
-    if (mounted) {
-      setState(() {
-        _registeredCustomers = customers;
-      });
-    }
-  }
 
   @override
   void dispose() {
     _phoneController.dispose();
-    _nameController.dispose();
     super.dispose();
   }
 
   void _submit() {
     final phone = _phoneController.text.trim();
-    final name = _nameController.text.trim();
     if (phone.isEmpty) return;
-    Navigator.of(context).pop({'phone': phone, 'name': name});
-  }
-
-  void _selectCustomer(Map<String, String> cust) {
-    Navigator.of(context).pop({
-      'phone': cust['phone']?.isNotEmpty == true ? cust['phone']! : cust['id']!,
-      'name': cust['name'] ?? '',
-    });
+    Navigator.of(context).pop({'phone': phone});
   }
 
   @override
@@ -1486,56 +1493,6 @@ class _InputManualBottomSheetState extends State<_InputManualBottomSheet> {
             ),
             onSubmitted: (_) => _submit(),
           ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _nameController,
-            keyboardType: TextInputType.name,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
-              labelText: 'Customer Name (Optional)',
-              hintText: 'e.g. Budi Santoso, Siti Rahma',
-              prefixIcon: Icon(Icons.person_outline_rounded, color: AppColors.primaryLight, size: 20),
-            ),
-            onSubmitted: (_) => _submit(),
-          ),
-
-          // Registered Customers Quick Select (if available)
-          if (_registeredCustomers.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            const Text(
-              'OR TAP REGISTERED CUSTOMER:',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textMuted,
-                letterSpacing: 0.5,
-              ),
-            ),
-            const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _registeredCustomers.map((cust) {
-                  final name = cust['name'] ?? 'Customer';
-                  final phone = cust['phone'] ?? '';
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ActionChip(
-                      avatar: const Icon(Icons.person_rounded, size: 16, color: AppColors.primaryLight),
-                      label: Text(
-                        phone.isNotEmpty ? '$name ($phone)' : name,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
-                      ),
-                      backgroundColor: AppColors.surfaceLight,
-                      side: const BorderSide(color: AppColors.border),
-                      onPressed: () => _selectCustomer(cust),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
@@ -1543,7 +1500,7 @@ class _InputManualBottomSheetState extends State<_InputManualBottomSheet> {
             child: ElevatedButton.icon(
               onPressed: _submit,
               icon: const Icon(Icons.search_rounded, size: 18),
-              label: const Text('Continue to Stamp Awarding', style: TextStyle(fontWeight: FontWeight.w700)),
+              label: const Text('Search & Continue', style: TextStyle(fontWeight: FontWeight.w700)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),

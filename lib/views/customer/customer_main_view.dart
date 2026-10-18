@@ -3,7 +3,6 @@ import '../../models/models.dart';
 import '../../theme/app_theme.dart';
 import 'customer_home_view.dart';
 import 'customer_profile_view.dart';
-import 'customer_vouchers_view.dart';
 
 class CustomerMainView extends StatefulWidget {
   final AppUser user;
@@ -21,7 +20,6 @@ class _CustomerMainViewState extends State<CustomerMainView> {
   Widget build(BuildContext context) {
     final pages = [
       CustomerHomeView(user: widget.user),
-      CustomerVouchersView(customerId: widget.user.id),
       CustomerProfileView(user: widget.user),
     ];
 
@@ -50,11 +48,6 @@ class _CustomerMainViewState extends State<CustomerMainView> {
               icon: Icon(Icons.style_rounded),
               activeIcon: Icon(Icons.style_rounded, color: AppColors.primaryLight),
               label: 'Cards',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.confirmation_num_rounded),
-              activeIcon: Icon(Icons.confirmation_num_rounded, color: AppColors.primaryLight),
-              label: 'Vouchers',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.account_circle_rounded),
