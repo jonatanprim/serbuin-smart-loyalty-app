@@ -231,7 +231,7 @@ class _RegisterViewState extends State<RegisterView> {
                     size: 20,
                     color: AppColors.textMuted,
                   ),
-                  hintText: _selectedRole == UserRole.merchant ? 'e.g. Kedai Kopi Makmur' : 'e.g. Budi Santoso',
+                  hintText: _selectedRole == UserRole.merchant ? 'e.g. Coffee Haven' : 'e.g. Alex Johnson',
                 ),
               ),
               const SizedBox(height: 18),

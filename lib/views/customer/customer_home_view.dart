@@ -90,11 +90,11 @@ class _CustomerHomeViewState extends State<CustomerHomeView> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Voucher Sudah Digunakan',
+                            'Voucher Successfully Redeemed',
                             style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.white),
                           ),
                           Text(
-                            '${v.title} telah berhasil digunakan.',
+                            '${v.title} has been successfully redeemed.',
                             style: const TextStyle(fontSize: 12, color: Colors.white70),
                           ),
                         ],

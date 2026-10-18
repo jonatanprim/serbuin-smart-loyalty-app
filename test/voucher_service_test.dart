@@ -40,7 +40,12 @@ void main() {
       // Attempting to redeem again should fail
       final secondAttempt = await db.redeemVoucher(result['voucher'] as Voucher);
       expect(secondAttempt['success'], isFalse);
-      expect(secondAttempt['message'], contains('sudah digunakan'));
+      expect(secondAttempt['message'], contains('already redeemed'));
+
+      // Attempting to redeem by wrong merchant should fail
+      final wrongMerchantAttempt = await db.redeemVoucher(testVoucher, merchantId: 'wrong-merchant');
+      expect(wrongMerchantAttempt['success'], isFalse);
+      expect(wrongMerchantAttempt['message'], contains('not from this merchant'));
     });
 
     test('getLastCustomerTransaction retrieves correct latest transaction info', () {

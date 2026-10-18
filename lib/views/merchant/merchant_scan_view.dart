@@ -109,8 +109,78 @@ class _MerchantScanViewState extends State<MerchantScanView> {
       if (isVoucherQuery) {
         final voucher = await db.findVoucher(cleanQuery);
         if (voucher != null) {
+          // Cross-merchant validation: ensure voucher belongs to this merchant
+          if (voucher.merchantId != widget.merchantId) {
+            if (mounted) {
+              setState(() {
+                _isProcessing = false;
+                _lastScannedCode = null;
+              });
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      const Icon(Icons.error_outline_rounded, color: Colors.white, size: 24),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Invalid Voucher',
+                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Colors.white),
+                            ),
+                            Text(
+                              'Voucher is not from this merchant. This voucher belongs to ${voucher.merchantName}.',
+                              style: const TextStyle(fontSize: 11, color: Colors.white70),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  backgroundColor: AppColors.accentRose,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
+            return;
+          }
+
           if (mounted) {
             _showVoucherApprovalSheet(voucher);
+          }
+          return;
+        } else {
+          if (mounted) {
+            setState(() {
+              _isProcessing = false;
+              _lastScannedCode = null;
+            });
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Row(
+                  children: [
+                    Icon(Icons.error_outline_rounded, color: Colors.white, size: 24),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Voucher not found. Please verify the code or check if it was redeemed.',
+                        style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: AppColors.accentRose,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            );
           }
           return;
         }
@@ -252,11 +322,11 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Voucher Berhasil Disetujui!',
+                      'Voucher Successfully Approved!',
                       style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Colors.white),
                     ),
                     Text(
-                      '${voucher.title} telah digunakan. Pelanggan telah menerima notifikasi.',
+                      '${voucher.title} has been redeemed. The customer has received a notification.',
                       style: const TextStyle(fontSize: 11, color: Colors.white70),
                     ),
                   ],
@@ -337,7 +407,7 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Tambah Member Baru',
+                                'Enroll New Member',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w800,
@@ -346,7 +416,7 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                               ),
                               SizedBox(height: 2),
                               Text(
-                                'Pelanggan belum terdaftar di program ini',
+                                'Customer is not yet enrolled in this program',
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: AppColors.textSecondary,
@@ -440,12 +510,12 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                             text: TextSpan(
                               style: const TextStyle(fontSize: 13, color: Colors.white, height: 1.4),
                               children: [
-                                const TextSpan(text: 'Apakah Anda yakin ingin menambahkan '),
+                                const TextSpan(text: 'Are you sure you want to add '),
                                 TextSpan(
                                   text: customerName,
                                   style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primaryLight),
                                 ),
-                                const TextSpan(text: ' ke program loyalty '),
+                                const TextSpan(text: ' to loyalty program '),
                                 TextSpan(
                                   text: targetProgram.title,
                                   style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.accentEmerald),
@@ -502,7 +572,7 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                                   Row(
                                     children: [
                                       const Text(
-                                        'Beri +1 Stempel Langsung',
+                                        'Award +1 First Stamp Immediately',
                                         style: TextStyle(
                                           fontSize: 13,
                                           fontWeight: FontWeight.w800,
@@ -530,8 +600,8 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                                   const SizedBox(height: 2),
                                   Text(
                                     addOneStamp
-                                        ? 'Pelanggan langsung menerima stempel perdana (1/${targetProgram.totalStamps} stempel)'
-                                        : 'Pelanggan didaftarkan dengan 0 stempel',
+                                        ? 'Customer immediately receives their first stamp (1/${targetProgram.totalStamps} stamps)'
+                                        : 'Customer enrolled with 0 stamps',
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: addOneStamp ? AppColors.accentEmerald : AppColors.textMuted,
@@ -585,8 +655,8 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                                           Expanded(
                                             child: Text(
                                               count > 0
-                                                  ? 'Berhasil menambahkan $customerName sebagai member baru dengan +1 stempel!'
-                                                  : 'Berhasil menambahkan $customerName sebagai member baru!',
+                                                  ? 'Successfully enrolled $customerName as a new member with +1 stamp!'
+                                                  : 'Successfully enrolled $customerName as a new member!',
                                               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                                             ),
                                           ),
@@ -609,8 +679,8 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                             : const Icon(Icons.how_to_reg_rounded, size: 20),
                         label: Text(
                           isSubmitting
-                              ? 'Mendaftarkan Member...'
-                              : (addOneStamp ? 'Ya, Tambah & Beri 1 Stempel' : 'Ya, Tambahkan Sebagai Member'),
+                              ? 'Enrolling Member...'
+                              : (addOneStamp ? 'Yes, Enroll & Award 1 Stamp' : 'Yes, Enroll as Member'),
                           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
                         ),
                         style: ElevatedButton.styleFrom(
@@ -632,7 +702,7 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                           side: const BorderSide(color: AppColors.border),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
-                        child: const Text('Batal'),
+                        child: const Text('Cancel'),
                       ),
                     ),
                     const SizedBox(height: 12),

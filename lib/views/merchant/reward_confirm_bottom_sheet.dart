@@ -40,15 +40,15 @@ class _RewardConfirmBottomSheetState extends State<RewardConfirmBottomSheet> {
     final difference = now.difference(dt);
 
     if (difference.inMinutes < 1) {
-      return 'Baru saja';
+      return 'Just now';
     } else if (difference.inHours < 1) {
-      return '${difference.inMinutes} menit yang lalu';
+      return '${difference.inMinutes}m ago';
     } else if (difference.inDays == 0 && now.day == dt.day) {
-      return 'Hari ini, ${DateFormat('HH:mm').format(dt)}';
+      return 'Today, ${DateFormat('HH:mm').format(dt)}';
     } else if (difference.inDays == 1 || (difference.inDays == 0 && now.day != dt.day)) {
-      return 'Kemarin, ${DateFormat('HH:mm').format(dt)}';
+      return 'Yesterday, ${DateFormat('HH:mm').format(dt)}';
     } else if (difference.inDays < 7) {
-      return '${difference.inDays} hari yang lalu';
+      return '${difference.inDays} days ago';
     } else {
       return DateFormat('dd MMM yyyy').format(dt);
     }
@@ -61,8 +61,16 @@ class _RewardConfirmBottomSheetState extends State<RewardConfirmBottomSheet> {
       _errorMessage = null;
     });
 
+    if (widget.voucher.merchantId != widget.merchantId) {
+      setState(() {
+        _isRedeeming = false;
+        _errorMessage = 'Voucher is not from this merchant. This voucher belongs to ${widget.voucher.merchantName}.';
+      });
+      return;
+    }
+
     final db = context.read<MockDatabaseService>();
-    final result = await db.redeemVoucher(widget.voucher);
+    final result = await db.redeemVoucher(widget.voucher, merchantId: widget.merchantId);
 
     if (!mounted) return;
 
@@ -71,7 +79,7 @@ class _RewardConfirmBottomSheetState extends State<RewardConfirmBottomSheet> {
     } else {
       setState(() {
         _isRedeeming = false;
-        _errorMessage = result['message'] ?? 'Gagal memproses voucher.';
+        _errorMessage = result['message'] ?? 'Failed to process voucher.';
       });
     }
   }
@@ -137,7 +145,7 @@ class _RewardConfirmBottomSheetState extends State<RewardConfirmBottomSheet> {
                       ),
                       const SizedBox(width: 10),
                       const Text(
-                        'Konfirmasi Voucher',
+                        'Confirm Voucher Reward',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
@@ -165,10 +173,10 @@ class _RewardConfirmBottomSheetState extends State<RewardConfirmBottomSheet> {
                     ),
                     child: Text(
                       isAlreadyRedeemed
-                          ? 'SUDAH DIGUNAKAN'
+                          ? 'ALREADY REDEEMED'
                           : isExpired
-                              ? 'KEDALUWARSA'
-                              : 'VOUCHER VALID',
+                              ? 'EXPIRED'
+                              : 'VALID VOUCHER',
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
@@ -184,7 +192,7 @@ class _RewardConfirmBottomSheetState extends State<RewardConfirmBottomSheet> {
               ),
               const SizedBox(height: 6),
               const Text(
-                'Periksa detail pelanggan dan data voucher sebelum menyetujui klaim.',
+                'Verify customer details and voucher status before approving redemption.',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 16),
@@ -293,7 +301,7 @@ class _RewardConfirmBottomSheetState extends State<RewardConfirmBottomSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'TRANSAKSI TERAKHIR PELANGGAN',
+                            'LAST CUSTOMER TRANSACTION',
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
@@ -305,7 +313,7 @@ class _RewardConfirmBottomSheetState extends State<RewardConfirmBottomSheet> {
                           Text(
                             widget.lastTransactionDate != null
                                 ? _formatDate(widget.lastTransactionDate!)
-                                : 'Belum ada riwayat transaksi',
+                                : 'No previous transaction history',
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w800,
@@ -335,7 +343,7 @@ class _RewardConfirmBottomSheetState extends State<RewardConfirmBottomSheet> {
                               ],
                               Expanded(
                                 child: Text(
-                                  widget.lastTransactionNote ?? 'Riwayat loyalty aktif',
+                                  widget.lastTransactionNote ?? 'Active loyalty history',
                                   style: const TextStyle(
                                     fontSize: 11,
                                     color: AppColors.textSecondary,
@@ -423,7 +431,7 @@ class _RewardConfirmBottomSheetState extends State<RewardConfirmBottomSheet> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'KODE VOUCHER',
+                                'VOUCHER CODE',
                                 style: TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.w700,
@@ -446,7 +454,7 @@ class _RewardConfirmBottomSheetState extends State<RewardConfirmBottomSheet> {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               const Text(
-                                'BERLAKU HINGGA',
+                                'VALID UNTIL',
                                 style: TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.w700,
@@ -511,7 +519,7 @@ class _RewardConfirmBottomSheetState extends State<RewardConfirmBottomSheet> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Voucher ini sudah digunakan pada ${voucher.redeemedAt != null ? _formatDate(voucher.redeemedAt!) : "sebelumnya"}.',
+                          'This voucher was already used on ${voucher.redeemedAt != null ? _formatDate(voucher.redeemedAt!) : "previously"}.',
                           style: const TextStyle(fontSize: 12, color: Colors.white),
                         ),
                       ),
@@ -535,7 +543,7 @@ class _RewardConfirmBottomSheetState extends State<RewardConfirmBottomSheet> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Voucher ini telah kedaluwarsa pada ${DateFormat('dd MMM yyyy').format(voucher.expiresAt)}.',
+                          'This voucher expired on ${DateFormat('dd MMM yyyy').format(voucher.expiresAt)}.',
                           style: const TextStyle(fontSize: 12, color: Colors.white),
                         ),
                       ),
@@ -560,7 +568,7 @@ class _RewardConfirmBottomSheetState extends State<RewardConfirmBottomSheet> {
                           )
                         : const Icon(Icons.check_circle_rounded, size: 20),
                     label: Text(
-                      _isRedeeming ? 'Memproses Persetujuan...' : 'Approve & Gunakan Voucher',
+                      _isRedeeming ? 'Processing Approval...' : 'Approve & Redeem Voucher',
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
                     ),
                     style: ElevatedButton.styleFrom(
@@ -582,7 +590,7 @@ class _RewardConfirmBottomSheetState extends State<RewardConfirmBottomSheet> {
                     side: const BorderSide(color: AppColors.border),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
-                  child: Text(canApprove ? 'Batal' : 'Tutup'),
+                  child: Text(canApprove ? 'Cancel' : 'Close'),
                 ),
               ),
             ],

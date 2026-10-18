@@ -54,11 +54,11 @@ class _CustomerVouchersViewState extends State<CustomerVouchersView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Voucher Sudah Digunakan',
+                    'Voucher Successfully Redeemed',
                     style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.white),
                   ),
                   Text(
-                    '${voucher.title} telah berhasil digunakan.',
+                    '${voucher.title} has been successfully redeemed.',
                     style: const TextStyle(fontSize: 12, color: Colors.white70),
                   ),
                 ],

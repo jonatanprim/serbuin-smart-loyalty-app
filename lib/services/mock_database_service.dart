@@ -637,8 +637,8 @@ class MockDatabaseService extends ChangeNotifier {
     } else {
       CloudRunService().sendFcmNotification(
         customerId: actualCustomerId,
-        title: '🎉 Selamat Datang di ${program.title}!',
-        body: 'Anda telah resmi terdaftar sebagai member di ${program.merchantName}.',
+        title: '🎉 Welcome to ${program.title}!',
+        body: 'You are now officially a member of ${program.merchantName}.',
       );
     }
 
@@ -742,7 +742,7 @@ class MockDatabaseService extends ChangeNotifier {
   /// Get the most recent transaction date and activity description for a customer
   Map<String, dynamic> getLastCustomerTransaction(String customerId, {String? merchantId}) {
     DateTime? latestDate;
-    String description = 'Aktivitas loyalty card';
+    String description = 'Loyalty card activity';
     int? stampsCount;
 
     // 1. Inspect activities
@@ -775,7 +775,7 @@ class MockDatabaseService extends ChangeNotifier {
       final memberLastDate = userMembers.first.lastStampDate;
       if (latestDate == null || memberLastDate.isAfter(latestDate)) {
         latestDate = memberLastDate;
-        description = 'Stempel terakhir di ${userMembers.first.programTitle}';
+        description = 'Last stamp on ${userMembers.first.programTitle}';
         stampsCount = userMembers.first.stampsCollected;
       }
     }
@@ -810,20 +810,27 @@ class MockDatabaseService extends ChangeNotifier {
   }
 
   /// Approve and redeem voucher object
-  Future<Map<String, dynamic>> redeemVoucher(Voucher voucher) async {
+  Future<Map<String, dynamic>> redeemVoucher(Voucher voucher, {String? merchantId}) async {
+    if (merchantId != null && merchantId.isNotEmpty && voucher.merchantId != merchantId) {
+      return {
+        'success': false,
+        'message': 'Voucher is not from this merchant. This voucher belongs to ${voucher.merchantName}.',
+      };
+    }
+
     final index = _vouchers.indexWhere((v) => v.id == voucher.id || v.code.toUpperCase() == voucher.code.toUpperCase());
     final currentVoucher = index != -1 ? _vouchers[index] : voucher;
 
     if (currentVoucher.isRedeemed) {
-      final redeemedStr = currentVoucher.redeemedAt != null ? _formatDate(currentVoucher.redeemedAt!) : 'sebelumnya';
+      final redeemedStr = currentVoucher.redeemedAt != null ? _formatDate(currentVoucher.redeemedAt!) : 'previously';
       return {
         'success': false,
-        'message': 'Voucher sudah digunakan pada $redeemedStr.',
+        'message': 'Voucher was already redeemed on $redeemedStr.',
       };
     }
 
     if (DateTime.now().isAfter(currentVoucher.expiresAt)) {
-      return {'success': false, 'message': 'Voucher telah kedaluwarsa.'};
+      return {'success': false, 'message': 'Voucher has expired.'};
     }
 
     final updated = currentVoucher.copyWith(
@@ -841,8 +848,8 @@ class MockDatabaseService extends ChangeNotifier {
       id: _uuid.v4(),
       userId: updated.customerId,
       type: 'voucher_redeemed',
-      title: 'Voucher Sudah Digunakan',
-      subtitle: '${updated.title} • Digunakan di ${updated.merchantName}',
+      title: 'Voucher Redeemed',
+      subtitle: '${updated.title} • Redeemed at ${updated.merchantName}',
       merchantName: updated.merchantName,
       timestamp: DateTime.now(),
     );
@@ -867,28 +874,28 @@ class MockDatabaseService extends ChangeNotifier {
     // Trigger Cloud Run FCM push notification to customer
     CloudRunService().sendFcmNotification(
       customerId: updated.customerId,
-      title: 'Voucher Sudah Digunakan',
-      body: 'Voucher "${updated.title}" telah berhasil digunakan di ${updated.merchantName}.',
+      title: 'Voucher Successfully Redeemed',
+      body: 'Voucher "${updated.title}" has been successfully redeemed at ${updated.merchantName}.',
     );
 
     return {
       'success': true,
       'voucher': updated,
-      'message': 'Voucher "${updated.title}" berhasil disetujui & digunakan!',
+      'message': 'Voucher "${updated.title}" successfully approved & redeemed!',
     };
   }
 
   /// Redeem voucher by QR scan code
-  Future<Map<String, dynamic>> redeemVoucherByCode(String code) async {
+  Future<Map<String, dynamic>> redeemVoucherByCode(String code, {String? merchantId}) async {
     final clean = cleanVoucherCode(code);
     var voucher = await findVoucher(clean);
     voucher ??= await findVoucher(code);
 
     if (voucher == null) {
-      return {'success': false, 'message': 'Voucher tidak ditemukan.'};
+      return {'success': false, 'message': 'Voucher not found.'};
     }
 
-    return redeemVoucher(voucher);
+    return redeemVoucher(voucher, merchantId: merchantId);
   }
 
   /// Send AI retention voucher to a member
