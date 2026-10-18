@@ -60,6 +60,7 @@ class _MerchantScanViewState extends State<MerchantScanView> {
     );
 
     if (result != null && result['phone'] != null && result['phone']!.isNotEmpty) {
+      _lastScannedCode = null;
       _handleScanOrInput(result['phone']!, providedName: result['name']);
     }
   }
@@ -69,20 +70,126 @@ class _MerchantScanViewState extends State<MerchantScanView> {
     if (_isProcessing) return;
     setState(() => _isProcessing = true);
 
-    final db = context.read<MockDatabaseService>();
+    try {
+      final db = context.read<MockDatabaseService>();
+      final merchantProgs = db.programs.where((p) => p.merchantId == widget.merchantId).toList();
+      final programId = _selectedProgramId ?? (merchantProgs.isNotEmpty ? merchantProgs.first.id : '');
 
-    // 1. Check if the code represents a Reward Voucher
-    final voucher = await db.findVoucher(query);
-    if (voucher != null) {
-      if (mounted) {
-        setState(() => _isProcessing = false);
-        _showVoucherApprovalSheet(voucher);
+      if (programId.isEmpty) {
+        if (mounted) setState(() => _isProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please create or select an active loyalty program first.'),
+            backgroundColor: AppColors.accentRose,
+          ),
+        );
+        return;
       }
-      return;
-    }
 
-    // 2. Otherwise treat as Member Lookup for stamp awarding
-    _handleCustomerLookup(query, providedName: providedName);
+      final targetProgram = merchantProgs.firstWhere(
+        (p) => p.id == programId,
+        orElse: () => merchantProgs.first,
+      );
+
+      final cleanQuery = query.trim();
+      if (cleanQuery.isEmpty) {
+        if (mounted) setState(() => _isProcessing = false);
+        return;
+      }
+
+      // 1. Check if the code represents a Reward Voucher
+      final isVoucherQuery = !cleanQuery.contains('|') && (
+          cleanQuery.toUpperCase().startsWith('SRB-') ||
+          cleanQuery.toUpperCase().startsWith('RET-') ||
+          cleanQuery.toUpperCase().startsWith('VOUCHER|') ||
+          db.vouchers.any((v) =>
+              v.code.toUpperCase() == cleanQuery.toUpperCase() ||
+              v.id.toUpperCase() == cleanQuery.toUpperCase()));
+
+      if (isVoucherQuery) {
+        final voucher = await db.findVoucher(cleanQuery);
+        if (voucher != null) {
+          if (mounted) {
+            _showVoucherApprovalSheet(voucher);
+          }
+          return;
+        }
+      }
+
+      // 2. Otherwise treat as Member Lookup for stamp awarding or enrollment
+      // Parse potential QR payload: "cust-id|Customer Name|phone" or "cust-id" or phone
+      String customerId = cleanQuery;
+      String customerName = 'Member';
+      String customerPhone = cleanQuery;
+
+      if (cleanQuery.contains('|')) {
+        final parts = cleanQuery.split('|');
+        customerId = parts[0].trim();
+        if (parts.length > 1 && parts[1].trim().isNotEmpty) customerName = parts[1].trim();
+        if (parts.length > 2 && parts[2].trim().isNotEmpty) customerPhone = parts[2].trim();
+      }
+
+      // Check if customer is already an active member of THIS program
+      MemberRecord? existingMember = db.findActiveMemberInProgram(
+        query: customerId,
+        programId: programId,
+      );
+      if (existingMember == null && customerPhone.isNotEmpty && customerPhone != customerId) {
+        existingMember = db.findActiveMemberInProgram(
+          query: customerPhone,
+          programId: programId,
+        );
+      }
+
+      if (existingMember != null) {
+        // Customer is ALREADY a member -> Show bottomsheet to add stamps for customer
+        if (mounted) {
+          _showCustomerAwardBottomSheet(
+            customerId: existingMember.customerId,
+            customerName: existingMember.customerName,
+            customerPhone: existingMember.customerPhone,
+            currentStamps: existingMember.stampsCollected,
+            targetProgram: targetProgram,
+          );
+        }
+        return;
+      }
+
+      // Customer is NOT yet a member -> Resolve customer details
+      final regUser = await db.findRegisteredCustomer(
+        customerPhone.isNotEmpty ? customerPhone : (customerId.isNotEmpty ? customerId : cleanQuery),
+      );
+
+      if (regUser != null) {
+        customerId = regUser['id']!;
+        customerName = regUser['name']!;
+        customerPhone = regUser['phone']!;
+      } else if (providedName != null && providedName.trim().isNotEmpty) {
+        customerName = providedName.trim();
+      } else if (customerId.startsWith('cust-') && !customerId.contains(RegExp(r'^[0-9]+$'))) {
+        final cleanId = customerId.replaceAll('cust-', '');
+        customerName = cleanId.isNotEmpty ? cleanId[0].toUpperCase() + cleanId.substring(1) : 'Customer';
+      } else if (customerName == 'Member' && customerPhone.isNotEmpty) {
+        customerName = 'Customer';
+      }
+
+      if (mounted) {
+        _showAddNewMemberBottomSheet(
+          customerId: customerId,
+          customerName: customerName,
+          customerPhone: customerPhone,
+          targetProgram: targetProgram,
+        );
+      }
+    } catch (e) {
+      debugPrint('Error in _handleScanOrInput: $e');
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+          _lastScannedCode = null;
+        });
+      }
+    }
   }
 
   /// Shows the Voucher Approval BottomSheet with last customer transaction date
@@ -125,6 +232,13 @@ class _MerchantScanViewState extends State<MerchantScanView> {
       ),
     );
 
+    if (mounted) {
+      setState(() {
+        _isProcessing = false;
+        _lastScannedCode = null;
+      });
+    }
+
     if (approved == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -160,98 +274,14 @@ class _MerchantScanViewState extends State<MerchantScanView> {
     }
   }
 
-  void _handleCustomerLookup(String query, {String? providedName}) async {
-    if (_isProcessing) return;
-    setState(() => _isProcessing = true);
-
-    final db = context.read<MockDatabaseService>();
-    final merchantProgs = db.programs.where((p) => p.merchantId == widget.merchantId).toList();
-    final programId = _selectedProgramId ?? (merchantProgs.isNotEmpty ? merchantProgs.first.id : '');
-
-    if (programId.isEmpty) {
-      setState(() => _isProcessing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please create or select an active loyalty program first.'),
-          backgroundColor: AppColors.accentRose,
-        ),
-      );
-      return;
-    }
-
-    final targetProgram = merchantProgs.firstWhere(
-      (p) => p.id == programId,
-      orElse: () => merchantProgs.first,
-    );
-
-    // Parse potential QR payload: "cust-id|Customer Name|phone" or "cust-id" or phone
-    String customerId = query;
-    String customerName = 'Member';
-    String customerPhone = query;
-
-    if (query.contains('|')) {
-      final parts = query.split('|');
-      customerId = parts[0];
-      if (parts.length > 1 && parts[1].isNotEmpty) customerName = parts[1];
-      if (parts.length > 2 && parts[2].isNotEmpty) customerPhone = parts[2];
-    }
-
-    // 1. Try finding in program members for this specific program
-    final existingMember = db.findActiveMemberInProgram(
-      query: customerId.isNotEmpty ? customerId : query,
-      programId: programId,
-    );
-
-    if (existingMember != null) {
-      // Customer is ALREADY a member -> Show bottomsheet to add stamps for customer
-      if (mounted) {
-        setState(() => _isProcessing = false);
-        _showCustomerAwardBottomSheet(
-          customerId: existingMember.customerId,
-          customerName: existingMember.customerName,
-          customerPhone: existingMember.customerPhone,
-          currentStamps: existingMember.stampsCollected,
-          targetProgram: targetProgram,
-        );
-      }
-      return;
-    }
-
-    // 2. Customer is NOT a member -> Resolve customer details
-    final regUser = await db.findRegisteredCustomer(customerPhone.isNotEmpty ? customerPhone : (customerId.isNotEmpty ? customerId : query));
-    if (regUser != null) {
-      customerId = regUser['id']!;
-      customerName = regUser['name']!;
-      customerPhone = regUser['phone']!;
-    } else if (providedName != null && providedName.trim().isNotEmpty) {
-      customerName = providedName.trim();
-    } else if (customerId.startsWith('cust-') && !customerId.contains(RegExp(r'^[0-9]+$'))) {
-      final cleanId = customerId.replaceAll('cust-', '');
-      customerName = cleanId.isNotEmpty ? cleanId[0].toUpperCase() + cleanId.substring(1) : 'Customer';
-    } else if (customerName == 'Member' && customerPhone.isNotEmpty) {
-      customerName = 'Customer';
-    }
-
-    if (mounted) {
-      setState(() => _isProcessing = false);
-
-      _showAddNewMemberBottomSheet(
-        customerId: customerId,
-        customerName: customerName,
-        customerPhone: customerPhone,
-        targetProgram: targetProgram,
-      );
-    }
-  }
-
   /// Bottom Sheet shown when scanned customer is NOT YET a member of this program
   void _showAddNewMemberBottomSheet({
     required String customerId,
     required String customerName,
     required String customerPhone,
     required LoyaltyProgram targetProgram,
-  }) {
-    showModalBottomSheet(
+  }) async {
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -614,6 +644,13 @@ class _MerchantScanViewState extends State<MerchantScanView> {
         );
       },
     );
+
+    if (mounted) {
+      setState(() {
+        _isProcessing = false;
+        _lastScannedCode = null;
+      });
+    }
   }
 
   void _showCustomerAwardBottomSheet({
@@ -622,8 +659,8 @@ class _MerchantScanViewState extends State<MerchantScanView> {
     required String customerPhone,
     required int currentStamps,
     required LoyaltyProgram targetProgram,
-  }) {
-    showModalBottomSheet(
+  }) async {
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -1015,6 +1052,13 @@ class _MerchantScanViewState extends State<MerchantScanView> {
         );
       },
     );
+
+    if (mounted) {
+      setState(() {
+        _isProcessing = false;
+        _lastScannedCode = null;
+      });
+    }
   }
 
   @override
@@ -1039,7 +1083,7 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                 if (code != null && code.isNotEmpty) {
                   if (_lastScannedCode == code &&
                       _lastScannedTime != null &&
-                      DateTime.now().difference(_lastScannedTime!).inSeconds < 3) {
+                      DateTime.now().difference(_lastScannedTime!).inSeconds < 2) {
                     return;
                   }
                   _lastScannedCode = code;
