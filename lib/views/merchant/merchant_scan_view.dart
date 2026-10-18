@@ -31,13 +31,7 @@ class _MerchantScanViewState extends State<MerchantScanView> {
     MobileScannerPlatform.instance.setBarcodeLibraryScriptUrl(
       'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js',
     );
-    _scannerController = MobileScannerController(
-      autoStart: true,
-      facing: CameraFacing.back,
-      detectionSpeed: DetectionSpeed.normal,
-      formats: const [BarcodeFormat.qrCode],
-      returnImage: false,
-    );
+    _scannerController = MobileScannerController();
 
     _scannerController.addListener(() {
       final v = _scannerController.value;
@@ -112,13 +106,15 @@ class _MerchantScanViewState extends State<MerchantScanView> {
       final programId = _selectedProgramId ?? (merchantProgs.isNotEmpty ? merchantProgs.first.id : '');
 
       if (programId.isEmpty) {
-        if (mounted) setState(() => _isProcessing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please create or select an active loyalty program first.'),
-            backgroundColor: AppColors.accentRose,
-          ),
-        );
+        if (mounted) {
+          setState(() => _isProcessing = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please create or select an active loyalty program first.'),
+              backgroundColor: AppColors.accentRose,
+            ),
+          );
+        }
         return;
       }
 
@@ -1169,24 +1165,17 @@ class _MerchantScanViewState extends State<MerchantScanView> {
 
   @override
   Widget build(BuildContext context) {
-    final db = context.watch<MockDatabaseService>();
-    final merchantProgs = db.programs.where((p) => p.merchantId == widget.merchantId).toList();
-
     return Scaffold(
       backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Fullscreen Camera Scanner Feed with explicit layout bounds
+          // 1. Fullscreen Camera Scanner Feed
           Positioned.fill(
-            child: SizedBox(
-              width: MediaQuery.of(context).size.width,
-              height: MediaQuery.of(context).size.height,
-              child: MobileScanner(
-                controller: _scannerController,
-                fit: BoxFit.cover,
-                onDetect: (capture) {
+            child: MobileScanner(
+              controller: _scannerController,
+              onDetect: (capture) {
                   if (_isProcessing) return;
                   final List<Barcode> barcodes = capture.barcodes;
                   if (barcodes.isNotEmpty) {
@@ -1335,7 +1324,6 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                 },
               ),
             ),
-          ),
 
           // 2. Translucent Vignette Mask & Scanning Frame Overlay
           const QRScannerOverlay(scanAreaSize: 260),
@@ -1404,38 +1392,49 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                     ],
                   ),
 
-                  // Target program picker chip
-                  if (merchantProgs.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.65),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _selectedProgramId ?? merchantProgs.first.id,
-                          dropdownColor: AppColors.surfaceCard,
-                          isDense: true,
-                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
-                          items: merchantProgs.map((p) {
-                            return DropdownMenuItem(
-                              value: p.id,
-                              child: Text(
-                                'Awarding to: ${p.title} (${p.totalStamps} stamps)',
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (val) {
-                            if (val != null) setState(() => _selectedProgramId = val);
-                          },
+                  // Target program picker chip (isolated Consumer to prevent scanner rebuilds)
+                  Consumer<MockDatabaseService>(
+                    builder: (context, db, _) {
+                      final merchantProgs = db.programs.where((p) => p.merchantId == widget.merchantId).toList();
+                      if (merchantProgs.isEmpty) return const SizedBox.shrink();
+
+                      final selectedId = _selectedProgramId != null && merchantProgs.any((p) => p.id == _selectedProgramId)
+                          ? _selectedProgramId!
+                          : merchantProgs.first.id;
+
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.65),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: selectedId,
+                              dropdownColor: AppColors.surfaceCard,
+                              isDense: true,
+                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                              items: merchantProgs.map((p) {
+                                return DropdownMenuItem(
+                                  value: p.id,
+                                  child: Text(
+                                    'Awarding to: ${p.title} (${p.totalStamps} stamps)',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (val) {
+                                if (val != null) setState(() => _selectedProgramId = val);
+                              },
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
