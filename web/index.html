@@ -18,11 +18,15 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="description" content="Serbuin - Smart Loyalty App with AI Insights & Rewards">
+
+  <!-- Theme Color -->
+  <meta name="theme-color" content="#10B981">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Serbuin">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
@@ -34,53 +38,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
-  
-  <!-- ZXing Barcode & QR library UMD bundle directly loaded for instant, reliable scanning -->
-  <script id="mobile-scanner-barcode-reader" src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
-
-  <!-- Inline camera playback rules for mobile browsers (iOS & Android) -->
-  <script>
-    (function() {
-      function makeVideoInline(el) {
-        if (!el || el.__inline_done) return;
-        el.__inline_done = true;
-        try {
-          el.setAttribute('playsinline', '');
-          el.setAttribute('webkit-playsinline', '');
-          el.setAttribute('muted', '');
-          el.setAttribute('autoplay', '');
-          el.playsInline = true;
-          el.webkitPlaysInline = true;
-          el.muted = true;
-          el.defaultMuted = true;
-          el.autoplay = true;
-        } catch (_) {}
-      }
-
-      // Safe creation interceptor: ensures every <video> is created with inline attributes
-      try {
-        var origCreate = document.createElement.bind(document);
-        document.createElement = function(tag, opts) {
-          var el = origCreate(tag, opts);
-          if (tag && String(tag).toLowerCase() === 'video') {
-            makeVideoInline(el);
-          }
-          return el;
-        };
-      } catch (_) {}
-
-      // Capture loadedmetadata to ensure inline playback
-      window.addEventListener('loadedmetadata', function(e) {
-        if (e.target && e.target.tagName === 'VIDEO') {
-          makeVideoInline(e.target);
-          try {
-            var p = e.target.play();
-            if (p && p.catch) p.catch(function() {});
-          } catch (_) {}
-        }
-      }, true);
-    })();
-  </script>
 </head>
 <body>
   <!--
