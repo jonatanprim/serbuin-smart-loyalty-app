@@ -17,7 +17,7 @@ class MerchantScanView extends StatefulWidget {
   State<MerchantScanView> createState() => _MerchantScanViewState();
 }
 
-class _MerchantScanViewState extends State<MerchantScanView> with WidgetsBindingObserver {
+class _MerchantScanViewState extends State<MerchantScanView> {
   late final MobileScannerController _scannerController;
   bool _isProcessing = false;
   String? _selectedProgramId;
@@ -28,7 +28,6 @@ class _MerchantScanViewState extends State<MerchantScanView> with WidgetsBinding
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     MobileScannerPlatform.instance.setBarcodeLibraryScriptUrl(
       'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js',
     );
@@ -57,23 +56,8 @@ class _MerchantScanViewState extends State<MerchantScanView> with WidgetsBinding
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _scannerController.dispose();
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    if (!mounted) return;
-
-    if (state == AppLifecycleState.resumed) {
-      // Re-check and resume camera if returning from iOS permission modal dialog
-      final v = _scannerController.value;
-      if (!v.isRunning && !v.isStarting) {
-        _restartScanner();
-      }
-    }
   }
 
   Future<void> _restartScanner() async {
@@ -1649,26 +1633,13 @@ class _QRScannerOverlayState extends State<QRScannerOverlay> with SingleTickerPr
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        ColorFiltered(
-          colorFilter: ColorFilter.mode(widget.overlayColor, BlendMode.srcOut),
-          child: Stack(
-            children: [
-              Container(
-                decoration: const BoxDecoration(
-                  color: Colors.transparent,
-                ),
-              ),
-              Center(
-                child: Container(
-                  width: widget.scanAreaSize,
-                  height: widget.scanAreaSize,
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-              ),
-            ],
+        Positioned.fill(
+          child: CustomPaint(
+            painter: _ScannerOverlayPainter(
+              overlayColor: widget.overlayColor,
+              scanAreaSize: widget.scanAreaSize,
+              borderRadius: 20,
+            ),
           ),
         ),
         Center(
@@ -1770,3 +1741,49 @@ class _ScannerFramePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+/// Pure vector evenOdd overlay painter - 100% stable across WebKit, CanvasKit, iOS, Android without blend mode issues
+class _ScannerOverlayPainter extends CustomPainter {
+  final Color overlayColor;
+  final double scanAreaSize;
+  final double borderRadius;
+
+  const _ScannerOverlayPainter({
+    required this.overlayColor,
+    required this.scanAreaSize,
+    this.borderRadius = 20,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final backgroundPath = Path()
+      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
+
+    final cutoutRect = Rect.fromCenter(
+      center: Offset(size.width / 2, size.height / 2),
+      width: scanAreaSize,
+      height: scanAreaSize,
+    );
+
+    final cutoutPath = Path()
+      ..addRRect(RRect.fromRectAndRadius(cutoutRect, Radius.circular(borderRadius)));
+
+    final combinedPath = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addPath(backgroundPath, Offset.zero)
+      ..addPath(cutoutPath, Offset.zero);
+
+    final paint = Paint()
+      ..color = overlayColor
+      ..style = PaintingStyle.fill;
+
+    canvas.drawPath(combinedPath, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScannerOverlayPainter oldDelegate) =>
+      oldDelegate.overlayColor != overlayColor ||
+      oldDelegate.scanAreaSize != scanAreaSize ||
+      oldDelegate.borderRadius != borderRadius;
+}
+
