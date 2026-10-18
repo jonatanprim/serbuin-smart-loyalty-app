@@ -50,5 +50,14 @@ void main() {
       expect(txInfo.containsKey('date'), isTrue);
       expect(txInfo.containsKey('description'), isTrue);
     });
+
+    test('findActiveMemberInProgram returns null for non-member and finds existing member', () {
+      final db = MockDatabaseService();
+      final nonMember = db.findActiveMemberInProgram(
+        query: 'nonexistent-cust-id',
+        programId: 'prog-1',
+      );
+      expect(nonMember, isNull);
+    });
   });
 }

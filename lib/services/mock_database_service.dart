@@ -308,6 +308,33 @@ class MockDatabaseService extends ChangeNotifier {
     }
   }
 
+  /// Find active member record belonging strictly to the specified program
+  MemberRecord? findActiveMemberInProgram({
+    required String query,
+    required String programId,
+  }) {
+    final cleanQuery = query.trim();
+    if (cleanQuery.isEmpty) return null;
+
+    final cleanDigits = normalizePhoneNumber(cleanQuery);
+    final cleanAlpha = cleanQuery.toLowerCase();
+
+    for (final m in _members.where((m) => m.programId == programId)) {
+      final phoneDigits = normalizePhoneNumber(m.customerPhone);
+      if (cleanDigits.length >= 6 && phoneDigits.isNotEmpty) {
+        if (phoneDigits.endsWith(cleanDigits) || cleanDigits.endsWith(phoneDigits)) {
+          return m;
+        }
+      }
+      if (m.customerId.toLowerCase() == cleanAlpha ||
+          m.customerName.toLowerCase() == cleanAlpha ||
+          (cleanAlpha.length >= 4 && m.customerName.toLowerCase().contains(cleanAlpha))) {
+        return m;
+      }
+    }
+    return null;
+  }
+
   /// Find customer/member record by phone number, customer ID, or name
   MemberRecord? findMemberByPhoneOrIdentifier({
     required String query,
@@ -567,12 +594,12 @@ class MockDatabaseService extends ChangeNotifier {
     final newActivity = ActivityLog(
       id: _uuid.v4(),
       userId: actualCustomerId,
-      type: 'stamp_earned',
-      title: 'Earned +$count Stamp${count > 1 ? 's' : ''}',
+      type: count > 0 ? 'stamp_earned' : 'program_joined',
+      title: count > 0 ? 'Earned +$count Stamp${count > 1 ? 's' : ''}' : 'Joined ${program.title}',
       subtitle: '${member.stampsCollected}/${member.totalStampsRequired} stamps on ${program.title}',
       merchantName: program.merchantName,
       timestamp: DateTime.now(),
-      stampsCount: count,
+      stampsCount: count > 0 ? count : null,
     );
     _activities.insert(0, newActivity);
 
@@ -601,18 +628,28 @@ class MockDatabaseService extends ChangeNotifier {
     }
 
     // Trigger Cloud Run FCM push notification
-    CloudRunService().sendFcmNotification(
-      customerId: actualCustomerId,
-      title: member.stampsCollected >= program.totalStamps ? '🎉 Reward Unlocked!' : '☕ +$count Stamp Earned!',
-      body: '${member.stampsCollected}/${program.totalStamps} stamps collected on ${program.title}',
-    );
+    if (count > 0) {
+      CloudRunService().sendFcmNotification(
+        customerId: actualCustomerId,
+        title: member.stampsCollected >= program.totalStamps ? '🎉 Reward Unlocked!' : '☕ +$count Stamp Earned!',
+        body: '${member.stampsCollected}/${program.totalStamps} stamps collected on ${program.title}',
+      );
+    } else {
+      CloudRunService().sendFcmNotification(
+        customerId: actualCustomerId,
+        title: '🎉 Selamat Datang di ${program.title}!',
+        body: 'Anda telah resmi terdaftar sebagai member di ${program.merchantName}.',
+      );
+    }
 
     return {
       'success': true,
       'member': member,
       'program': program,
       'isCompleted': member.stampsCollected >= program.totalStamps,
-      'message': 'Successfully awarded +$count stamp to ${member.customerName}!',
+      'message': count > 0
+          ? 'Successfully awarded +$count stamp to ${member.customerName}!'
+          : 'Successfully added ${member.customerName} as member!',
     };
   }
 

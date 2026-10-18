@@ -196,46 +196,424 @@ class _MerchantScanViewState extends State<MerchantScanView> {
       if (parts.length > 2 && parts[2].isNotEmpty) customerPhone = parts[2];
     }
 
-    // 1. Try finding in program members
-    final existingMember = db.findMemberByPhoneOrIdentifier(
+    // 1. Try finding in program members for this specific program
+    final existingMember = db.findActiveMemberInProgram(
       query: customerId.isNotEmpty ? customerId : query,
       programId: programId,
     );
 
-    int currentStamps = 0;
     if (existingMember != null) {
-      customerId = existingMember.customerId;
-      customerName = existingMember.customerName;
-      customerPhone = existingMember.customerPhone;
-      currentStamps = existingMember.stampsCollected;
-    } else {
-      // 2. Try looking up in registered user accounts
-      final regUser = await db.findRegisteredCustomer(customerPhone.isNotEmpty ? customerPhone : (customerId.isNotEmpty ? customerId : query));
-      if (regUser != null) {
-        customerId = regUser['id']!;
-        customerName = regUser['name']!;
-        customerPhone = regUser['phone']!;
-      } else if (providedName != null && providedName.trim().isNotEmpty) {
-        customerName = providedName.trim();
-      } else if (customerId.startsWith('cust-') && !customerId.contains(RegExp(r'^[0-9]+$'))) {
-        final cleanId = customerId.replaceAll('cust-', '');
-        customerName = cleanId.isNotEmpty ? cleanId[0].toUpperCase() + cleanId.substring(1) : 'Customer';
-      } else {
-        customerName = 'Member';
+      // Customer is ALREADY a member -> Show bottomsheet to add stamps for customer
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        _showCustomerAwardBottomSheet(
+          customerId: existingMember.customerId,
+          customerName: existingMember.customerName,
+          customerPhone: existingMember.customerPhone,
+          currentStamps: existingMember.stampsCollected,
+          targetProgram: targetProgram,
+        );
       }
+      return;
+    }
+
+    // 2. Customer is NOT a member -> Resolve customer details
+    final regUser = await db.findRegisteredCustomer(customerPhone.isNotEmpty ? customerPhone : (customerId.isNotEmpty ? customerId : query));
+    if (regUser != null) {
+      customerId = regUser['id']!;
+      customerName = regUser['name']!;
+      customerPhone = regUser['phone']!;
+    } else if (providedName != null && providedName.trim().isNotEmpty) {
+      customerName = providedName.trim();
+    } else if (customerId.startsWith('cust-') && !customerId.contains(RegExp(r'^[0-9]+$'))) {
+      final cleanId = customerId.replaceAll('cust-', '');
+      customerName = cleanId.isNotEmpty ? cleanId[0].toUpperCase() + cleanId.substring(1) : 'Customer';
+    } else if (customerName == 'Member' && customerPhone.isNotEmpty) {
+      customerName = 'Customer';
     }
 
     if (mounted) {
       setState(() => _isProcessing = false);
 
-      _showCustomerAwardBottomSheet(
+      _showAddNewMemberBottomSheet(
         customerId: customerId,
         customerName: customerName,
         customerPhone: customerPhone,
-        currentStamps: currentStamps,
         targetProgram: targetProgram,
       );
     }
+  }
+
+  /// Bottom Sheet shown when scanned customer is NOT YET a member of this program
+  void _showAddNewMemberBottomSheet({
+    required String customerId,
+    required String customerName,
+    required String customerPhone,
+    required LoyaltyProgram targetProgram,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (bottomSheetCtx) {
+        bool addOneStamp = true; // default checked as requested: "add button check to add one stamp"
+        bool isSubmitting = false;
+
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              decoration: const BoxDecoration(
+                color: AppColors.surfaceCard,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+                border: Border(
+                  top: BorderSide(color: AppColors.primaryLight, width: 2),
+                ),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Handle bar
+                    Container(
+                      width: 44,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: AppColors.border,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+
+                    // Header Icon & Title
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.person_add_alt_1_rounded,
+                            color: AppColors.primaryLight,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Tambah Member Baru',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Pelanggan belum terdaftar di program ini',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.accentAmber.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.accentAmber.withValues(alpha: 0.3)),
+                          ),
+                          child: const Text(
+                            'NEW MEMBER',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.accentAmber,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+
+                    // Prompt question container: "Are you sure add [customerName] to member?"
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: const BoxDecoration(
+                                  gradient: AppColors.primaryGradient,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    customerName.isNotEmpty ? customerName[0].toUpperCase() : 'M',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      customerName,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      customerPhone.isNotEmpty ? customerPhone : 'ID: $customerId',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          const Divider(height: 1, color: AppColors.border),
+                          const SizedBox(height: 12),
+                          RichText(
+                            text: TextSpan(
+                              style: const TextStyle(fontSize: 13, color: Colors.white, height: 1.4),
+                              children: [
+                                const TextSpan(text: 'Apakah Anda yakin ingin menambahkan '),
+                                TextSpan(
+                                  text: customerName,
+                                  style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primaryLight),
+                                ),
+                                const TextSpan(text: ' ke program loyalty '),
+                                TextSpan(
+                                  text: targetProgram.title,
+                                  style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.accentEmerald),
+                                ),
+                                const TextSpan(text: '?'),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Interactive check button to add one stamp
+                    InkWell(
+                      onTap: () => setSheetState(() => addOneStamp = !addOneStamp),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: addOneStamp
+                              ? AppColors.accentEmerald.withValues(alpha: 0.12)
+                              : AppColors.surfaceLight,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: addOneStamp
+                                ? AppColors.accentEmerald.withValues(alpha: 0.5)
+                                : AppColors.border,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: addOneStamp ? AppColors.accentEmerald : Colors.transparent,
+                                border: Border.all(
+                                  color: addOneStamp ? AppColors.accentEmerald : AppColors.textMuted,
+                                  width: 2,
+                                ),
+                              ),
+                              child: addOneStamp
+                                  ? const Icon(Icons.check_rounded, color: Colors.white, size: 16)
+                                  : null,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Text(
+                                        'Beri +1 Stempel Langsung',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.accentEmerald.withValues(alpha: 0.2),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: const Text(
+                                          '+1 STAMP',
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w900,
+                                            color: AppColors.accentEmerald,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    addOneStamp
+                                        ? 'Pelanggan langsung menerima stempel perdana (1/${targetProgram.totalStamps} stempel)'
+                                        : 'Pelanggan didaftarkan dengan 0 stempel',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: addOneStamp ? AppColors.accentEmerald : AppColors.textMuted,
+                                      fontWeight: addOneStamp ? FontWeight.w600 : FontWeight.w400,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+
+                    // Confirm Action Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton.icon(
+                        onPressed: isSubmitting
+                            ? null
+                            : () async {
+                                setSheetState(() => isSubmitting = true);
+                                final db = context.read<MockDatabaseService>();
+                                final messenger = ScaffoldMessenger.of(context);
+                                final navigator = Navigator.of(context);
+                                final count = addOneStamp ? 1 : 0;
+
+                                await db.awardStampToCustomer(
+                                  merchantId: widget.merchantId,
+                                  customerId: customerId,
+                                  customerName: customerName,
+                                  customerPhone: customerPhone,
+                                  programId: targetProgram.id,
+                                  count: count,
+                                );
+
+                                if (bottomSheetCtx.mounted) {
+                                  Navigator.pop(bottomSheetCtx);
+                                }
+
+                                if (mounted) {
+                                  navigator.pop(); // Close scanner and return to Home
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Row(
+                                        children: [
+                                          const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              count > 0
+                                                  ? 'Berhasil menambahkan $customerName sebagai member baru dengan +1 stempel!'
+                                                  : 'Berhasil menambahkan $customerName sebagai member baru!',
+                                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      backgroundColor: AppColors.accentEmerald,
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                      duration: const Duration(seconds: 4),
+                                    ),
+                                  );
+                                }
+                              },
+                        icon: isSubmitting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              )
+                            : const Icon(Icons.how_to_reg_rounded, size: 20),
+                        label: Text(
+                          isSubmitting
+                              ? 'Mendaftarkan Member...'
+                              : (addOneStamp ? 'Ya, Tambah & Beri 1 Stempel' : 'Ya, Tambahkan Sebagai Member'),
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.accentEmerald,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Cancel button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(bottomSheetCtx),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white70,
+                          side: const BorderSide(color: AppColors.border),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: const Text('Batal'),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   void _showCustomerAwardBottomSheet({
