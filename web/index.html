@@ -37,6 +37,92 @@
   
   <!-- ZXing Barcode & QR library UMD bundle directly loaded for instant, reliable scanning -->
   <script id="mobile-scanner-barcode-reader" src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
+
+  <!-- iOS Safari WebKit camera fix: ensures playsinline, webkit-playsinline, autoplay, muted, and active playback on permission approval -->
+  <script>
+    (function() {
+      function fixVideoElement(video) {
+        if (!video) return;
+        try {
+          video.setAttribute('playsinline', 'true');
+          video.setAttribute('webkit-playsinline', 'true');
+          video.playsInline = true;
+          video.muted = true;
+          video.setAttribute('muted', 'true');
+          video.autoplay = true;
+          video.setAttribute('autoplay', 'true');
+
+          const playVideo = function() {
+            if (video.srcObject && video.paused) {
+              const p = video.play();
+              if (p && typeof p.then === 'function') {
+                p.catch(function() {});
+              }
+            }
+          };
+
+          video.addEventListener('loadedmetadata', playVideo);
+          video.addEventListener('canplay', playVideo);
+          video.addEventListener('loadeddata', playVideo);
+          playVideo();
+        } catch (e) {
+          console.warn('[Serbuin] iOS video fix error:', e);
+        }
+      }
+
+      // Intercept getUserMedia on iOS to handle the exact moment permission is approved
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+        navigator.mediaDevices.getUserMedia = function(constraints) {
+          return origGetUserMedia(constraints).then(function(stream) {
+            setTimeout(function() {
+              const videos = document.querySelectorAll('video');
+              videos.forEach(fixVideoElement);
+            }, 50);
+            setTimeout(function() {
+              const videos = document.querySelectorAll('video');
+              videos.forEach(fixVideoElement);
+            }, 300);
+            return stream;
+          });
+        };
+      }
+
+      // Observe DOM mutations to fix any dynamically added <video> tags immediately
+      const observer = new MutationObserver(function(mutations) {
+        for (let i = 0; i < mutations.length; i++) {
+          const added = mutations[i].addedNodes;
+          for (let j = 0; j < added.length; j++) {
+            const node = added[j];
+            if (node.nodeType === 1) {
+              if (node.tagName && node.tagName.toLowerCase() === 'video') {
+                fixVideoElement(node);
+              } else if (node.querySelectorAll) {
+                node.querySelectorAll('video').forEach(fixVideoElement);
+              }
+            }
+          }
+        }
+      });
+
+      if (document.body) {
+        observer.observe(document.body, { childList: true, subtree: true });
+      } else {
+        document.addEventListener('DOMContentLoaded', function() {
+          if (document.body) observer.observe(document.body, { childList: true, subtree: true });
+        });
+      }
+
+      // Gesture fallback: iOS Safari allows inline stream playback on touch
+      window.addEventListener('touchstart', function() {
+        document.querySelectorAll('video').forEach(function(v) {
+          if (v.srcObject && v.paused) {
+            v.play().catch(function() {});
+          }
+        });
+      }, { passive: true });
+    })();
+  </script>
 </head>
 <body>
   <!--

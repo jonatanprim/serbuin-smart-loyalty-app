@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/mock_database_service.dart';
@@ -15,20 +17,29 @@ class MerchantScanView extends StatefulWidget {
   State<MerchantScanView> createState() => _MerchantScanViewState();
 }
 
-class _MerchantScanViewState extends State<MerchantScanView> {
+class _MerchantScanViewState extends State<MerchantScanView> with WidgetsBindingObserver {
   late final MobileScannerController _scannerController;
   bool _isProcessing = false;
   String? _selectedProgramId;
   String? _lastScannedCode;
   DateTime? _lastScannedTime;
+  bool _isCameraPermissionDenied = false;
+  bool _isStartingCamera = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     MobileScannerPlatform.instance.setBarcodeLibraryScriptUrl(
       'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js',
     );
-    _scannerController = MobileScannerController();
+    _scannerController = MobileScannerController(
+      autoStart: false,
+      facing: CameraFacing.back,
+      detectionSpeed: DetectionSpeed.normal,
+      formats: const [BarcodeFormat.qrCode],
+      returnImage: false,
+    );
 
     _scannerController.addListener(() {
       final v = _scannerController.value;
@@ -43,12 +54,92 @@ class _MerchantScanViewState extends State<MerchantScanView> {
     if (merchantProgs.isNotEmpty) {
       _selectedProgramId = merchantProgs.first.id;
     }
+
+    _startScanner();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scannerController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (!mounted) return;
+
+    if (state == AppLifecycleState.resumed) {
+      // Re-check and resume camera if returning from iOS permission modal dialog
+      final v = _scannerController.value;
+      if (!v.isRunning && !v.isStarting) {
+        _startScanner();
+      }
+    }
+  }
+
+  Future<void> _startScanner() async {
+    if (!mounted || _isStartingCamera) return;
+    _isStartingCamera = true;
+
+    try {
+      if (!kIsWeb) {
+        final status = await Permission.camera.request();
+        if (!status.isGranted) {
+          if (mounted) {
+            setState(() {
+              _isCameraPermissionDenied = true;
+              _isStartingCamera = false;
+            });
+          }
+          return;
+        }
+      }
+
+      if (_scannerController.value.isRunning) {
+        _isStartingCamera = false;
+        return;
+      }
+
+      await _scannerController.start();
+      if (mounted) {
+        setState(() {
+          _isCameraPermissionDenied = false;
+          _isStartingCamera = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error starting scanner: $e');
+      if (mounted) {
+        setState(() => _isStartingCamera = false);
+      }
+    }
+  }
+
+  Future<void> _restartScanner() async {
+    if (!mounted) return;
+    try {
+      if (_scannerController.value.isRunning) {
+        await _scannerController.stop();
+      }
+    } catch (_) {}
+
+    try {
+      if (!kIsWeb) {
+        final status = await Permission.camera.request();
+        if (!status.isGranted) {
+          if (mounted) setState(() => _isCameraPermissionDenied = true);
+          return;
+        }
+      }
+      await _scannerController.start();
+      if (mounted) {
+        setState(() => _isCameraPermissionDenied = false);
+      }
+    } catch (e) {
+      debugPrint('Failed to restart scanner: $e');
+    }
   }
 
   void _showInputManualSheet() async {
@@ -1145,6 +1236,7 @@ class _MerchantScanViewState extends State<MerchantScanView> {
           // 1. Fullscreen Camera Scanner Feed
           MobileScanner(
             controller: _scannerController,
+            fit: BoxFit.cover,
             onDetect: (capture) {
               if (_isProcessing) return;
               final List<Barcode> barcodes = capture.barcodes;
@@ -1166,8 +1258,7 @@ class _MerchantScanViewState extends State<MerchantScanView> {
               color: Colors.black,
               child: Center(
                 child: SizedBox(
-                  width: 240,
-                  height: 240,
+                  width: 260,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -1214,12 +1305,25 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 16),
                         child: Text(
-                          'Allow camera access if prompted by your browser',
+                          'Allow camera access if prompted by iOS or browser',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: AppColors.textSecondary,
                             fontSize: 11,
                             height: 1.3,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextButton.icon(
+                        onPressed: _restartScanner,
+                        icon: const Icon(Icons.refresh_rounded, size: 16, color: AppColors.primaryLight),
+                        label: const Text(
+                          'Tap to restart camera',
+                          style: TextStyle(
+                            color: AppColors.primaryLight,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -1229,7 +1333,7 @@ class _MerchantScanViewState extends State<MerchantScanView> {
               ),
             ),
             errorBuilder: (context, error) {
-              final isDenied = error.errorCode == MobileScannerErrorCode.permissionDenied;
+              final isDenied = error.errorCode == MobileScannerErrorCode.permissionDenied || _isCameraPermissionDenied;
               return ColoredBox(
                 color: Colors.black,
                 child: Center(
@@ -1241,13 +1345,13 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                         const Icon(Icons.videocam_off_rounded, color: AppColors.accentRose, size: 44),
                         const SizedBox(height: 12),
                         Text(
-                          isDenied ? 'Camera permission denied' : 'Camera unavailable',
+                          isDenied ? 'Camera permission required' : 'Camera unavailable',
                           style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 6),
                         Text(
                           isDenied
-                              ? 'Enable camera access for this site (lock icon in the address bar), then tap Retry.'
+                              ? 'Please enable camera access for Serbuin in iOS Settings or browser settings, then tap Retry.'
                               : (error.errorDetails?.message ?? error.errorCode.name),
                           textAlign: TextAlign.center,
                           style: const TextStyle(color: Colors.white60, fontSize: 12),
@@ -1257,12 +1361,9 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             ElevatedButton.icon(
-                              onPressed: () async {
-                                await _scannerController.stop();
-                                await _scannerController.start();
-                              },
+                              onPressed: _restartScanner,
                               icon: const Icon(Icons.refresh_rounded, size: 18),
-                              label: const Text('Retry'),
+                              label: const Text('Retry Camera'),
                               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
                             ),
                             const SizedBox(width: 12),
@@ -1315,16 +1416,34 @@ class _MerchantScanViewState extends State<MerchantScanView> {
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
                       ),
 
-                      // Torch toggle button
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.5),
-                          shape: BoxShape.circle,
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.flash_on_rounded, color: Colors.white, size: 20),
-                          onPressed: () => _scannerController.toggleTorch(),
-                        ),
+                      // Camera reload & Torch toggle buttons
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              shape: BoxShape.circle,
+                            ),
+                            child: IconButton(
+                              tooltip: 'Restart Camera',
+                              icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 19),
+                              onPressed: _restartScanner,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              shape: BoxShape.circle,
+                            ),
+                            child: IconButton(
+                              tooltip: 'Flash',
+                              icon: const Icon(Icons.flash_on_rounded, color: Colors.white, size: 20),
+                              onPressed: () => _scannerController.toggleTorch(),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
