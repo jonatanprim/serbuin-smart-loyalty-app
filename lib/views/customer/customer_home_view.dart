@@ -250,6 +250,20 @@ class _CustomerHomeViewState extends State<CustomerHomeView> {
           memberRecords.any((m) => a.subtitle.contains(m.programTitle));
     }).toList();
 
+    // Programs available to join (no active card for customer)
+    final activeProgramIds = memberRecords
+        .where((m) => m.status == 'active')
+        .map((m) => m.programId)
+        .toSet();
+    final customerMerchantIds = memberRecords.map((m) => m.merchantId).toSet();
+
+    var joinablePrograms = db.programs.where((p) => p.isActive && !activeProgramIds.contains(p.id)).toList();
+    joinablePrograms.sort((a, b) {
+      final aHas = customerMerchantIds.contains(a.merchantId) ? 1 : 0;
+      final bHas = customerMerchantIds.contains(b.merchantId) ? 1 : 0;
+      return bHas.compareTo(aHas);
+    });
+
     return Scaffold(
       body: SafeArea(
         child: RefreshIndicator(
@@ -530,6 +544,138 @@ class _CustomerHomeViewState extends State<CustomerHomeView> {
                 ),
 
               const SizedBox(height: 28),
+
+              // Available Programs to Join Section
+              if (joinablePrograms.isNotEmpty) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Join More Programs',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      '${joinablePrograms.length} available',
+                      style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 130,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: joinablePrograms.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final prog = joinablePrograms[index];
+                      final isFromMyMerchant = customerMerchantIds.contains(prog.merchantId);
+                      return Container(
+                        width: 260,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceCard,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: isFromMyMerchant ? AppColors.primary.withValues(alpha: 0.5) : AppColors.border,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    gradient: AppColors.gradientFromHex(prog.gradientColors),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(Icons.loyalty_rounded, color: Colors.white, size: 18),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        prog.title,
+                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        prog.merchantName,
+                                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '🎁 ${prog.rewardTitle}',
+                                    style: const TextStyle(fontSize: 11, color: Colors.amberAccent, fontWeight: FontWeight.w600),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () async {
+                                    final newMem = await db.joinProgram(
+                                      customerId: widget.user.id,
+                                      programId: prog.id,
+                                      customerName: widget.user.name,
+                                      customerPhone: widget.user.phone,
+                                      customerEmail: widget.user.email,
+                                    );
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('🎉 Joined ${prog.title}! Added to your wallet.'),
+                                          backgroundColor: AppColors.accentEmerald,
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                        ),
+                                      );
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => CustomerCardDetailView(member: newMem, program: prog),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.accentEmerald,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    minimumSize: const Size(0, 32),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  child: const Text('Join', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
 
               // Recent Activities Section
               const Text(
@@ -853,7 +999,8 @@ class _StackedLoyaltyCardItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('dd MMM');
-    final isReadyToClaim = member.stampsCollected >= member.totalStampsRequired;
+    final isCompleted = member.status == 'completed';
+    final isReadyToClaim = !isCompleted && member.stampsCollected >= member.totalStampsRequired;
 
     return InkWell(
       onTap: onTap,
@@ -890,7 +1037,23 @@ class _StackedLoyaltyCardItem extends StatelessWidget {
                         style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white),
                       ),
                     ),
-                    if (isFront) ...[
+                    if (isCompleted) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.accentEmerald,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.check_circle_rounded, size: 12, color: Colors.white),
+                            SizedBox(width: 2),
+                            Text('COMPLETED', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white)),
+                          ],
+                        ),
+                      ),
+                    ] else if (isFront) ...[
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -975,25 +1138,33 @@ class _StackedLoyaltyCardItem extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: isReadyToClaim
-                    ? AppColors.accentEmerald.withValues(alpha: 0.4)
-                    : Colors.black.withValues(alpha: 0.3),
+                color: isCompleted
+                    ? AppColors.accentEmerald.withValues(alpha: 0.35)
+                    : isReadyToClaim
+                        ? AppColors.accentEmerald.withValues(alpha: 0.4)
+                        : Colors.black.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(12),
-                border: isReadyToClaim ? Border.all(color: Colors.white, width: 1.5) : null,
+                border: (isCompleted || isReadyToClaim) ? Border.all(color: Colors.white, width: 1.5) : null,
               ),
               child: Row(
                 children: [
                   Icon(
-                    isReadyToClaim ? Icons.celebration_rounded : Icons.star_rounded,
-                    color: Colors.amberAccent,
+                    isCompleted
+                        ? Icons.verified_rounded
+                        : isReadyToClaim
+                            ? Icons.celebration_rounded
+                            : Icons.star_rounded,
+                    color: isCompleted ? Colors.lightGreenAccent : Colors.amberAccent,
                     size: 16,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      isReadyToClaim
-                          ? '🎉 Ready to Claim: ${program.rewardTitle}!'
-                          : 'Reward: ${program.rewardTitle}',
+                      isCompleted
+                          ? '✅ Completed: ${program.rewardTitle} Claimed'
+                          : isReadyToClaim
+                              ? '🎉 Ready to Claim: ${program.rewardTitle}!'
+                              : 'Reward: ${program.rewardTitle}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),

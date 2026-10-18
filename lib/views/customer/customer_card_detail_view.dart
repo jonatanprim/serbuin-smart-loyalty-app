@@ -34,6 +34,11 @@ class _CustomerCardDetailViewState extends State<CustomerCardDetailView> {
     setState(() => _isClaiming = false);
 
     if (voucher != null && mounted) {
+      final otherMerchantPrograms = db.programs
+          .where((p) => p.merchantId == widget.program.merchantId && p.id != widget.program.id && p.isActive)
+          .toList();
+      final otherToJoin = otherMerchantPrograms.where((p) => !db.members.any((m) => m.programId == p.id && m.customerId == widget.member.customerId && m.status == 'active')).firstOrNull;
+
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -60,11 +65,44 @@ class _CustomerCardDetailViewState extends State<CustomerCardDetailView> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Your "${widget.program.rewardTitle}" voucher is now ready in your wallet with a dynamic QR code!',
+                'Your card is now marked as Completed! The "${widget.program.rewardTitle}" voucher is ready in your wallet with a dynamic QR code.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
               ),
-              const SizedBox(height: 24),
+              if (otherToJoin != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.stars_rounded, color: Colors.amberAccent, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Other Program at ${widget.program.merchantName}:',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${otherToJoin.title} • Reward: ${otherToJoin.rewardTitle}',
+                        style: const TextStyle(fontSize: 12, color: AppColors.primaryLight, fontWeight: FontWeight.w600),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -80,6 +118,38 @@ class _CustomerCardDetailViewState extends State<CustomerCardDetailView> {
                   child: const Text('View My Vouchers'),
                 ),
               ),
+              if (otherToJoin != null) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      final newMem = await db.joinProgram(
+                        customerId: widget.member.customerId,
+                        programId: otherToJoin.id,
+                        customerName: widget.member.customerName,
+                        customerPhone: widget.member.customerPhone,
+                        customerEmail: widget.member.customerEmail,
+                      );
+                      if (mounted) {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CustomerCardDetailView(member: newMem, program: otherToJoin),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+                    label: Text('Join ${otherToJoin.title}'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.accentEmerald,
+                      side: const BorderSide(color: AppColors.accentEmerald),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -99,8 +169,12 @@ class _CustomerCardDetailViewState extends State<CustomerCardDetailView> {
       orElse: () => widget.program,
     );
 
-    final canClaim = currentMember.stampsCollected >= currentProg.totalStamps;
+    final isCompleted = currentMember.status == 'completed';
+    final canClaim = !isCompleted && currentMember.stampsCollected >= currentProg.totalStamps;
     final remainingStamps = currentProg.totalStamps - currentMember.stampsCollected;
+    final otherMerchantPrograms = db.programs
+        .where((p) => p.merchantId == currentProg.merchantId && p.id != currentProg.id && p.isActive)
+        .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -134,16 +208,41 @@ class _CustomerCardDetailViewState extends State<CustomerCardDetailView> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Text(
-                            currentProg.category,
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white),
-                          ),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.25),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                currentProg.category,
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white),
+                              ),
+                            ),
+                            if (isCompleted) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.accentEmerald,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.check_circle_rounded, color: Colors.white, size: 12),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'COMPLETED',
+                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         const Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 28),
                       ],
@@ -216,31 +315,39 @@ class _CustomerCardDetailViewState extends State<CustomerCardDetailView> {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: canClaim
+                  color: isCompleted
                       ? AppColors.accentEmerald.withValues(alpha: 0.15)
-                      : AppColors.surfaceLight,
+                      : canClaim
+                          ? AppColors.accentEmerald.withValues(alpha: 0.15)
+                          : AppColors.surfaceLight,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: canClaim ? AppColors.accentEmerald : AppColors.border,
+                    color: (isCompleted || canClaim) ? AppColors.accentEmerald : AppColors.border,
                   ),
                 ),
                 child: Row(
                   children: [
                     Icon(
-                      canClaim ? Icons.stars_rounded : Icons.info_outline_rounded,
-                      color: canClaim ? AppColors.accentEmerald : AppColors.primaryLight,
+                      isCompleted
+                          ? Icons.verified_rounded
+                          : canClaim
+                              ? Icons.stars_rounded
+                              : Icons.info_outline_rounded,
+                      color: (isCompleted || canClaim) ? AppColors.accentEmerald : AppColors.primaryLight,
                       size: 22,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        canClaim
-                            ? '🎉 Congratulations! You have collected all ${currentProg.totalStamps} stamps and unlocked your reward!'
-                            : 'Collect $remainingStamps more stamp${remainingStamps > 1 ? "s" : ""} on your next visits to claim.',
+                        isCompleted
+                            ? '🎉 Program Completed! You have collected all ${currentProg.totalStamps} stamps and claimed your reward voucher.'
+                            : canClaim
+                                ? '🎉 Congratulations! You have collected all ${currentProg.totalStamps} stamps and unlocked your reward!'
+                                : 'Collect $remainingStamps more stamp${remainingStamps > 1 ? "s" : ""} on your next visits to claim.',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: canClaim ? Colors.white : AppColors.textSecondary,
+                          color: (isCompleted || canClaim) ? Colors.white : AppColors.textSecondary,
                         ),
                       ),
                     ),
@@ -340,29 +447,197 @@ class _CustomerCardDetailViewState extends State<CustomerCardDetailView> {
 
               const SizedBox(height: 28),
 
-              // Claim Button
+              // Main Action Button (Claim or View Claimed Voucher)
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: canClaim && !_isClaiming ? _claimReward : null,
-                  icon: _isClaiming
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.card_giftcard_rounded, size: 20),
-                  label: Text(
-                    canClaim
-                        ? 'Claim Reward Voucher Now'
-                        : 'Collect $remainingStamps More Stamps to Claim',
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: canClaim ? AppColors.accentEmerald : AppColors.surfaceLight,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                child: isCompleted
+                    ? ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CustomerVouchersView(customerId: currentMember.customerId),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.confirmation_number_rounded, size: 20),
+                        label: const Text('View Claimed Voucher in Wallet'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                      )
+                    : ElevatedButton.icon(
+                        onPressed: canClaim && !_isClaiming ? _claimReward : null,
+                        icon: _isClaiming
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.card_giftcard_rounded, size: 20),
+                        label: Text(
+                          canClaim
+                              ? 'Claim Reward Voucher Now'
+                              : 'Collect $remainingStamps More Stamps to Claim',
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: canClaim ? AppColors.accentEmerald : AppColors.surfaceLight,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                      ),
+              ),
+
+              // Other Programs from this Merchant Section
+              if (otherMerchantPrograms.isNotEmpty) ...[
+                const SizedBox(height: 28),
+                Row(
+                  children: [
+                    const Icon(Icons.storefront_rounded, color: AppColors.accentPurple, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Other Programs from ${currentProg.merchantName}',
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ...otherMerchantPrograms.map((otherProg) {
+                  final otherMember = db.members.where((m) =>
+                      m.programId == otherProg.id &&
+                      (m.customerId == currentMember.customerId || (currentMember.customerPhone.isNotEmpty && m.customerPhone == currentMember.customerPhone)) &&
+                      m.status == 'active').firstOrNull;
+                  final isAlreadyMember = otherMember != null;
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceCard,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            gradient: AppColors.gradientFromHex(otherProg.gradientColors),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Center(
+                            child: Icon(Icons.loyalty_rounded, color: Colors.white, size: 22),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                otherProg.title,
+                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Reward: ${otherProg.rewardTitle}',
+                                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () async {
+                            if (isAlreadyMember) {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CustomerCardDetailView(member: otherMember, program: otherProg),
+                                ),
+                              );
+                            } else {
+                              final newMem = await db.joinProgram(
+                                customerId: currentMember.customerId,
+                                programId: otherProg.id,
+                                customerName: currentMember.customerName,
+                                customerPhone: currentMember.customerPhone,
+                                customerEmail: currentMember.customerEmail,
+                              );
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('🎉 Joined ${otherProg.title}! Card added to your wallet.'),
+                                    backgroundColor: AppColors.accentEmerald,
+                                  ),
+                                );
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => CustomerCardDetailView(member: newMem, program: otherProg),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isAlreadyMember ? AppColors.surfaceLight : AppColors.accentEmerald,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: Text(
+                            isAlreadyMember ? 'View Card' : 'Join Program',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ] else if (isCompleted) ...[
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final newMem = await db.joinProgram(
+                        customerId: currentMember.customerId,
+                        programId: currentProg.id,
+                        customerName: currentMember.customerName,
+                        customerPhone: currentMember.customerPhone,
+                        customerEmail: currentMember.customerEmail,
+                      );
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('🎉 Started a new card for ${currentProg.title}!'),
+                            backgroundColor: AppColors.accentEmerald,
+                          ),
+                        );
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CustomerCardDetailView(member: newMem, program: currentProg),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.replay_rounded, size: 18),
+                    label: const Text('Start a New Card on this Program'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primaryLight,
+                      side: const BorderSide(color: AppColors.primaryLight),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
                   ),
                 ),
-              ),
+              ],
               const SizedBox(height: 24),
             ],
           ),

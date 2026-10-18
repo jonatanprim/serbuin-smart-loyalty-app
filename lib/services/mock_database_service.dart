@@ -319,7 +319,7 @@ class MockDatabaseService extends ChangeNotifier {
     final cleanDigits = normalizePhoneNumber(cleanQuery);
     final cleanAlpha = cleanQuery.toLowerCase();
 
-    for (final m in _members.where((m) => m.programId == programId)) {
+    for (final m in _members.where((m) => m.programId == programId && m.status == 'active')) {
       final phoneDigits = normalizePhoneNumber(m.customerPhone);
       if (cleanDigits.length >= 6 && phoneDigits.isNotEmpty) {
         if (phoneDigits.endsWith(cleanDigits) || cleanDigits.endsWith(phoneDigits)) {
@@ -583,9 +583,10 @@ class MockDatabaseService extends ChangeNotifier {
         : (regUser?['phone'] ?? '');
     final actualCustomerEmail = regUser?['email'] ?? '';
 
-    // Find existing member record in this program
+    // Find existing active member record in this program (preserve completed cards)
     final memberIndex = _members.indexWhere((m) {
       if (m.programId != programId) return false;
+      if (m.status == 'completed') return false;
       if (actualCustomerId.isNotEmpty && (m.customerId == actualCustomerId || m.customerId == customerId)) return true;
       if (normInputPhone.length >= 6) {
         final normMemberPhone = normalizePhoneNumber(m.customerPhone);
@@ -601,7 +602,6 @@ class MockDatabaseService extends ChangeNotifier {
     if (memberIndex != -1) {
       final existing = _members[memberIndex];
       final newStamps = (existing.stampsCollected + count).clamp(0, program.totalStamps);
-      final isCompleted = newStamps >= program.totalStamps;
 
       member = existing.copyWith(
         customerId: actualCustomerId.isNotEmpty ? actualCustomerId : existing.customerId,
@@ -611,7 +611,7 @@ class MockDatabaseService extends ChangeNotifier {
         customerPhone: actualCustomerPhone.isNotEmpty ? actualCustomerPhone : existing.customerPhone,
         customerEmail: actualCustomerEmail.isNotEmpty ? actualCustomerEmail : existing.customerEmail,
         stampsCollected: newStamps,
-        status: isCompleted ? 'completed' : 'active',
+        status: 'active',
         lastStampDate: DateTime.now(),
         riskLevel: 'low',
         riskReason: 'Active stamp earned.',
@@ -629,7 +629,7 @@ class MockDatabaseService extends ChangeNotifier {
         customerPhone: actualCustomerPhone,
         stampsCollected: count,
         totalStampsRequired: program.totalStamps,
-        status: count >= program.totalStamps ? 'completed' : 'active',
+        status: 'active',
         lastStampDate: DateTime.now(),
         joinedDate: DateTime.now(),
         riskLevel: 'low',
@@ -1030,13 +1030,16 @@ class MockDatabaseService extends ChangeNotifier {
 
   // --- Customer Methods ---
 
-  /// Claim a completed loyalty card reward to generate a voucher
+  /// Claim a completed loyalty card reward to generate a voucher and mark card as completed
   Future<Voucher?> claimProgramReward({
     required String customerId,
     required String programId,
   }) async {
     final memberIndex = _members.indexWhere(
-      (m) => m.customerId == customerId && m.programId == programId,
+      (m) =>
+          (m.customerId == customerId || m.id == customerId) &&
+          m.programId == programId &&
+          m.status != 'completed',
     );
     if (memberIndex == -1) return null;
     final member = _members[memberIndex];
@@ -1053,7 +1056,7 @@ class MockDatabaseService extends ChangeNotifier {
       programId: programId,
       merchantId: prog.merchantId,
       merchantName: prog.merchantName,
-      customerId: customerId,
+      customerId: member.customerId,
       title: prog.rewardTitle,
       description: prog.rewardDescription,
       discountType: 'free_item',
@@ -1065,20 +1068,20 @@ class MockDatabaseService extends ChangeNotifier {
 
     _vouchers.insert(0, voucher);
 
-    // Reset stamps or mark renewed
+    // Auto set card to completed and preserve total stamps
     final updatedMember = member.copyWith(
-      stampsCollected: 0,
-      status: 'active',
+      stampsCollected: member.totalStampsRequired,
+      status: 'completed',
       lastStampDate: DateTime.now(),
     );
     _members[memberIndex] = updatedMember;
 
     final act = ActivityLog(
       id: _uuid.v4(),
-      userId: customerId,
+      userId: member.customerId,
       type: 'voucher_claimed',
-      title: 'Reward Voucher Claimed!',
-      subtitle: prog.rewardTitle,
+      title: 'Program Completed & Reward Claimed! 🎉',
+      subtitle: '${prog.title} • ${prog.rewardTitle}',
       merchantName: prog.merchantName,
       timestamp: DateTime.now(),
     );
@@ -1105,6 +1108,112 @@ class MockDatabaseService extends ChangeNotifier {
     }
 
     return voucher;
+  }
+
+  /// Enroll or join customer into another loyalty program of that merchant
+  Future<MemberRecord> joinProgram({
+    required String customerId,
+    required String programId,
+    String? customerName,
+    String? customerPhone,
+    String? customerEmail,
+  }) async {
+    // If the customer already has an active card for this program, return it
+    for (final m in _members) {
+      if (m.programId == programId && m.customerId == customerId && m.status == 'active') {
+        return m;
+      }
+    }
+
+    final prog = _programs.firstWhere((p) => p.id == programId);
+
+    // Resolve customer details from registered customers or existing memberships
+    String finalName = customerName?.trim() ?? '';
+    String finalPhone = customerPhone?.trim() ?? '';
+    String finalEmail = customerEmail?.trim() ?? '';
+
+    if (finalName.isEmpty || finalPhone.isEmpty) {
+      final regUser = await findRegisteredCustomer(customerId);
+      if (regUser != null) {
+        if (finalName.isEmpty) finalName = regUser['name'] ?? 'Member';
+        if (finalPhone.isEmpty) finalPhone = regUser['phone'] ?? '';
+        if (finalEmail.isEmpty) finalEmail = regUser['email'] ?? '';
+      }
+    }
+
+    if (finalName.isEmpty) {
+      for (final m in _members) {
+        if (m.customerId == customerId) {
+          finalName = m.customerName;
+          if (finalPhone.isEmpty) finalPhone = m.customerPhone;
+          if (finalEmail.isEmpty) finalEmail = m.customerEmail;
+          break;
+        }
+      }
+    }
+
+    if (finalName.isEmpty) finalName = 'Member';
+
+    final newMember = MemberRecord(
+      id: 'mem-${DateTime.now().millisecondsSinceEpoch}-${_uuid.v4().substring(0, 4)}',
+      programId: programId,
+      programTitle: prog.title,
+      merchantId: prog.merchantId,
+      customerId: customerId,
+      customerName: finalName,
+      customerEmail: finalEmail,
+      customerPhone: finalPhone,
+      stampsCollected: 0,
+      totalStampsRequired: prog.totalStamps,
+      status: 'active',
+      lastStampDate: DateTime.now(),
+      joinedDate: DateTime.now(),
+      riskLevel: 'low',
+      riskReason: 'New membership enrolled',
+      recommendedVoucher: 'Welcome treat',
+      aiInsight: 'Joined ${prog.title}',
+    );
+
+    _members.insert(0, newMember);
+
+    // Increment program memberCount
+    final progIdx = _programs.indexWhere((p) => p.id == programId);
+    if (progIdx != -1) {
+      _programs[progIdx] = prog.copyWith(memberCount: prog.memberCount + 1);
+    }
+
+    final newActivity = ActivityLog(
+      id: _uuid.v4(),
+      userId: customerId,
+      type: 'program_joined',
+      title: 'Joined ${prog.title}',
+      subtitle: 'Started new loyalty membership at ${prog.merchantName}',
+      merchantName: prog.merchantName,
+      timestamp: DateTime.now(),
+    );
+    _activities.insert(0, newActivity);
+
+    await _saveToStorage();
+    notifyListeners();
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('members')
+          .doc(newMember.id)
+          .set(newMember.toMap(), SetOptions(merge: true));
+      await FirebaseFirestore.instance
+          .collection('programs')
+          .doc(prog.id)
+          .update({'memberCount': prog.memberCount + 1});
+      await FirebaseFirestore.instance
+          .collection('activities')
+          .doc(newActivity.id)
+          .set(newActivity.toMap(), SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Firestore joinProgram error: $e');
+    }
+
+    return newMember;
   }
 
   String _formatDate(DateTime dt) {
