@@ -49,6 +49,62 @@ class _MerchantMembersViewState extends State<MerchantMembersView> {
     );
   }
 
+  int get _activeFilterCount {
+    int count = 0;
+    if (_selectedProgramFilter != 'All') count++;
+    if (_selectedStatusFilter != 'All') count++;
+    if (_selectedRiskFilter != 'All') count++;
+    if (_selectedSortBy != 'churn_desc') count++;
+    return count;
+  }
+
+  String _getSortLabel(String sort) {
+    switch (sort) {
+      case 'churn_asc':
+        return 'Churn: Low to High';
+      case 'stamps_desc':
+        return 'Stamps: High to Low';
+      case 'inactive_desc':
+        return 'Most Inactive';
+      case 'churn_desc':
+      default:
+        return 'Churn: High to Low';
+    }
+  }
+
+  void _clearAllFilters() {
+    setState(() {
+      _selectedProgramFilter = 'All';
+      _selectedStatusFilter = 'All';
+      _selectedRiskFilter = 'All';
+      _selectedSortBy = 'churn_desc';
+    });
+  }
+
+  void _showFilterBottomSheet(List<LoyaltyProgram> merchantProgs) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _MemberFilterModal(
+        selectedProgramFilter: _selectedProgramFilter,
+        selectedStatusFilter: _selectedStatusFilter,
+        selectedRiskFilter: _selectedRiskFilter,
+        selectedSortBy: _selectedSortBy,
+        programs: merchantProgs,
+        onApply: (prog, status, risk, sort) {
+          setState(() {
+            _selectedProgramFilter = prog;
+            _selectedStatusFilter = status;
+            _selectedRiskFilter = risk;
+            _selectedSortBy = sort;
+          });
+        },
+        onReset: _clearAllFilters,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = context.watch<MockDatabaseService>();
@@ -205,139 +261,98 @@ class _MerchantMembersViewState extends State<MerchantMembersView> {
                     ),
                   ],
                 ),
-              ),
+              ),              const SizedBox(height: 18),
 
-              const SizedBox(height: 18),
-
-              // Churn Rate Filter & Sorting Controls
+              // Filter & Sort Action Bar
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Filter by Churn Risk',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+                  Text(
+                    '${filteredMembers.length} Members Enrolled',
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white),
                   ),
-                  // Sort dropdown
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceLight,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedSortBy,
-                        dropdownColor: AppColors.surfaceCard,
-                        icon: const Icon(Icons.sort_rounded, size: 16, color: AppColors.primaryLight),
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
-                        items: const [
-                          DropdownMenuItem(value: 'churn_desc', child: Text('Churn: High to Low')),
-                          DropdownMenuItem(value: 'churn_asc', child: Text('Churn: Low to High')),
-                          DropdownMenuItem(value: 'stamps_desc', child: Text('Stamps: High to Low')),
-                          DropdownMenuItem(value: 'inactive_desc', child: Text('Most Inactive First')),
+                  InkWell(
+                    onTap: () => _showFilterBottomSheet(merchantProgs),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _activeFilterCount > 0
+                            ? AppColors.primary.withValues(alpha: 0.2)
+                            : AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _activeFilterCount > 0 ? AppColors.primary : AppColors.border,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.tune_rounded,
+                            size: 15,
+                            color: _activeFilterCount > 0 ? AppColors.primaryLight : Colors.white70,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _activeFilterCount > 0 ? 'Filter & Sort ($_activeFilterCount)' : 'Filter & Sort',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: _activeFilterCount > 0 ? AppColors.primaryLight : Colors.white,
+                            ),
+                          ),
                         ],
-                        onChanged: (val) {
-                          if (val != null) setState(() => _selectedSortBy = val);
-                        },
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
 
-              // Churn Risk Chips
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _FilterChip(
-                      label: 'All Risks',
-                      isSelected: _selectedRiskFilter == 'All',
-                      onTap: () => setState(() => _selectedRiskFilter = 'All'),
-                    ),
-                    _FilterChip(
-                      label: '🚨 High Risk (75-96%)',
-                      isSelected: _selectedRiskFilter == 'High Risk',
-                      onTap: () => setState(() => _selectedRiskFilter = 'High Risk'),
-                    ),
-                    _FilterChip(
-                      label: '⚠️ Medium Risk (40-70%)',
-                      isSelected: _selectedRiskFilter == 'Medium Risk',
-                      onTap: () => setState(() => _selectedRiskFilter = 'Medium Risk'),
-                    ),
-                    _FilterChip(
-                      label: '✅ Low Risk (<30%)',
-                      isSelected: _selectedRiskFilter == 'Low Risk',
-                      onTap: () => setState(() => _selectedRiskFilter = 'Low Risk'),
-                    ),
-                  ],
+              // Active filter tags (if any active filters applied)
+              if (_activeFilterCount > 0) ...[
+                const SizedBox(height: 10),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      if (_selectedRiskFilter != 'All')
+                        _ActiveFilterBadge(
+                          label: 'Risk: $_selectedRiskFilter',
+                          onRemove: () => setState(() => _selectedRiskFilter = 'All'),
+                        ),
+                      if (_selectedProgramFilter != 'All')
+                        _ActiveFilterBadge(
+                          label: 'Program: ${merchantProgs.firstWhere((p) => p.id == _selectedProgramFilter, orElse: () => merchantProgs.first).title}',
+                          onRemove: () => setState(() => _selectedProgramFilter = 'All'),
+                        ),
+                      if (_selectedStatusFilter != 'All')
+                        _ActiveFilterBadge(
+                          label: 'Status: $_selectedStatusFilter',
+                          onRemove: () => setState(() => _selectedStatusFilter = 'All'),
+                        ),
+                      if (_selectedSortBy != 'churn_desc')
+                        _ActiveFilterBadge(
+                          label: 'Sort: ${_getSortLabel(_selectedSortBy)}',
+                          onRemove: () => setState(() => _selectedSortBy = 'churn_desc'),
+                        ),
+                      InkWell(
+                        onTap: _clearAllFilters,
+                        borderRadius: BorderRadius.circular(8),
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          child: Text(
+                            'Clear All',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.accentRose),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
 
-              const SizedBox(height: 14),
-
-              // Filter 2: By Loyalty Program
-              const Text(
-                'Filter by Program',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 8),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _FilterChip(
-                      label: 'All Programs',
-                      isSelected: _selectedProgramFilter == 'All',
-                      onTap: () => setState(() => _selectedProgramFilter = 'All'),
-                    ),
-                    ...merchantProgs.map((p) {
-                      return _FilterChip(
-                        label: p.title,
-                        isSelected: _selectedProgramFilter == p.id,
-                        onTap: () => setState(() => _selectedProgramFilter = p.id),
-                      );
-                    }),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // Filter 3: By Member Status
-              const Text(
-                'Filter by Status',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _FilterChip(
-                    label: 'All',
-                    isSelected: _selectedStatusFilter == 'All',
-                    onTap: () => setState(() => _selectedStatusFilter = 'All'),
-                  ),
-                  _FilterChip(
-                    label: 'Active',
-                    isSelected: _selectedStatusFilter == 'Active',
-                    onTap: () => setState(() => _selectedStatusFilter = 'Active'),
-                  ),
-                  _FilterChip(
-                    label: 'Completed',
-                    isSelected: _selectedStatusFilter == 'Completed',
-                    onTap: () => setState(() => _selectedStatusFilter = 'Completed'),
-                  ),
-                  _FilterChip(
-                    label: 'Expired',
-                    isSelected: _selectedStatusFilter == 'Expired',
-                    onTap: () => setState(() => _selectedStatusFilter = 'Expired'),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
               // Member List
               if (filteredMembers.isEmpty)
@@ -408,6 +423,292 @@ class _FilterChip extends StatelessWidget {
               color: isSelected ? Colors.white : AppColors.textSecondary,
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActiveFilterBadge extends StatelessWidget {
+  final String label;
+  final VoidCallback onRemove;
+
+  const _ActiveFilterBadge({required this.label, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
+          ),
+          const SizedBox(width: 5),
+          InkWell(
+            onTap: onRemove,
+            child: const Icon(Icons.close_rounded, size: 14, color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MemberFilterModal extends StatefulWidget {
+  final String selectedProgramFilter;
+  final String selectedStatusFilter;
+  final String selectedRiskFilter;
+  final String selectedSortBy;
+  final List<LoyaltyProgram> programs;
+  final void Function(String prog, String status, String risk, String sort) onApply;
+  final VoidCallback onReset;
+
+  const _MemberFilterModal({
+    required this.selectedProgramFilter,
+    required this.selectedStatusFilter,
+    required this.selectedRiskFilter,
+    required this.selectedSortBy,
+    required this.programs,
+    required this.onApply,
+    required this.onReset,
+  });
+
+  @override
+  State<_MemberFilterModal> createState() => _MemberFilterModalState();
+}
+
+class _MemberFilterModalState extends State<_MemberFilterModal> {
+  late String _tempProgram;
+  late String _tempStatus;
+  late String _tempRisk;
+  late String _tempSort;
+
+  @override
+  void initState() {
+    super.initState();
+    _tempProgram = widget.selectedProgramFilter;
+    _tempStatus = widget.selectedStatusFilter;
+    _tempRisk = widget.selectedRiskFilter;
+    _tempSort = widget.selectedSortBy;
+  }
+
+  void _resetLocal() {
+    setState(() {
+      _tempProgram = 'All';
+      _tempStatus = 'All';
+      _tempRisk = 'All';
+      _tempSort = 'churn_desc';
+    });
+    widget.onReset();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
+        decoration: const BoxDecoration(
+          color: AppColors.surfaceCard,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.tune_rounded, size: 20, color: AppColors.primaryLight),
+                    SizedBox(width: 8),
+                    Text(
+                      'Filter & Sort Members',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white),
+                    ),
+                  ],
+                ),
+                TextButton(
+                  onPressed: _resetLocal,
+                  child: const Text('Reset All', style: TextStyle(color: AppColors.accentRose, fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Section 1: Sort by
+                    const Text(
+                      'SORT DIRECTORY BY',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primaryLight, letterSpacing: 0.8),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _FilterChip(
+                          label: '🚨 Churn: High to Low',
+                          isSelected: _tempSort == 'churn_desc',
+                          onTap: () => setState(() => _tempSort = 'churn_desc'),
+                        ),
+                        _FilterChip(
+                          label: '✅ Churn: Low to High',
+                          isSelected: _tempSort == 'churn_asc',
+                          onTap: () => setState(() => _tempSort = 'churn_asc'),
+                        ),
+                        _FilterChip(
+                          label: '⭐ Stamps: High to Low',
+                          isSelected: _tempSort == 'stamps_desc',
+                          onTap: () => setState(() => _tempSort = 'stamps_desc'),
+                        ),
+                        _FilterChip(
+                          label: '⏳ Most Inactive First',
+                          isSelected: _tempSort == 'inactive_desc',
+                          onTap: () => setState(() => _tempSort = 'inactive_desc'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Section 2: Churn Risk Level
+                    const Text(
+                      'FILTER BY CHURN RISK LEVEL',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primaryLight, letterSpacing: 0.8),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _FilterChip(
+                          label: 'All Risks',
+                          isSelected: _tempRisk == 'All',
+                          onTap: () => setState(() => _tempRisk = 'All'),
+                        ),
+                        _FilterChip(
+                          label: '🚨 High Risk (75-96%)',
+                          isSelected: _tempRisk == 'High Risk',
+                          onTap: () => setState(() => _tempRisk = 'High Risk'),
+                        ),
+                        _FilterChip(
+                          label: '⚠️ Medium Risk (40-70%)',
+                          isSelected: _tempRisk == 'Medium Risk',
+                          onTap: () => setState(() => _tempRisk = 'Medium Risk'),
+                        ),
+                        _FilterChip(
+                          label: '✅ Low Risk (<30%)',
+                          isSelected: _tempRisk == 'Low Risk',
+                          onTap: () => setState(() => _tempRisk = 'Low Risk'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Section 3: Filter by Program
+                    const Text(
+                      'FILTER BY LOYALTY PROGRAM',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primaryLight, letterSpacing: 0.8),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _FilterChip(
+                          label: 'All Programs',
+                          isSelected: _tempProgram == 'All',
+                          onTap: () => setState(() => _tempProgram = 'All'),
+                        ),
+                        ...widget.programs.map((p) {
+                          return _FilterChip(
+                            label: p.title,
+                            isSelected: _tempProgram == p.id,
+                            onTap: () => setState(() => _tempProgram = p.id),
+                          );
+                        }),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Section 4: Membership Status
+                    const Text(
+                      'FILTER BY MEMBERSHIP STATUS',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primaryLight, letterSpacing: 0.8),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _FilterChip(
+                          label: 'All Statuses',
+                          isSelected: _tempStatus == 'All',
+                          onTap: () => setState(() => _tempStatus = 'All'),
+                        ),
+                        _FilterChip(
+                          label: 'Active',
+                          isSelected: _tempStatus == 'Active',
+                          onTap: () => setState(() => _tempStatus = 'Active'),
+                        ),
+                        _FilterChip(
+                          label: 'Completed',
+                          isSelected: _tempStatus == 'Completed',
+                          onTap: () => setState(() => _tempStatus = 'Completed'),
+                        ),
+                        _FilterChip(
+                          label: 'Expired',
+                          isSelected: _tempStatus == 'Expired',
+                          onTap: () => setState(() => _tempStatus = 'Expired'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  widget.onApply(_tempProgram, _tempStatus, _tempRisk, _tempSort);
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: const Text('Apply Filters', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+              ),
+            ),
+          ],
         ),
       ),
     );
