@@ -41,41 +41,97 @@
   <!-- iOS Safari and Chrome WebKit inline camera playback rules -->
   <script>
     (function() {
-      function makeVideoInline(v) {
-        if (!v || v.__inline_ready) return;
-        v.__inline_ready = true;
+      function setupVideo(v) {
+        if (!v) return;
         try {
           v.setAttribute('playsinline', '');
           v.setAttribute('webkit-playsinline', '');
-          v.playsInline = true;
-          v.muted = true;
           v.setAttribute('muted', '');
+          v.setAttribute('autoplay', '');
+          v.playsInline = true;
+          v.webkitPlaysInline = true;
+          v.muted = true;
+          v.defaultMuted = true;
+          v.autoplay = true;
         } catch (_) {}
       }
 
-      if (window.MutationObserver) {
-        var observer = new MutationObserver(function(mutations) {
-          for (var i = 0; i < mutations.length; i++) {
-            var added = mutations[i].addedNodes;
-            for (var j = 0; j < added.length; j++) {
-              var n = added[j];
-              if (n.nodeType === 1) {
-                if (n.tagName === 'VIDEO') {
-                  makeVideoInline(n);
-                } else if (n.getElementsByTagName) {
-                  var vids = n.getElementsByTagName('video');
-                  for (var k = 0; k < vids.length; k++) {
-                    makeVideoInline(vids[k]);
-                  }
-                }
+      // 1. Hook document.createElement to intercept video element creation
+      try {
+        var origCreate = document.createElement.bind(document);
+        document.createElement = function(tagName, options) {
+          var el = origCreate(tagName, options);
+          if (tagName && String(tagName).toLowerCase() === 'video') {
+            setupVideo(el);
+          }
+          return el;
+        };
+      } catch (_) {}
+
+      // 2. Hook HTMLMediaElement.prototype.play
+      try {
+        if (window.HTMLMediaElement && HTMLMediaElement.prototype.play) {
+          var origPlay = HTMLMediaElement.prototype.play;
+          HTMLMediaElement.prototype.play = function() {
+            setupVideo(this);
+            return origPlay.apply(this, arguments);
+          };
+        }
+      } catch (_) {}
+
+      // 3. Hook srcObject setter
+      try {
+        var desc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'srcObject');
+        if (desc && desc.set) {
+          var origSet = desc.set;
+          Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', {
+            get: desc.get,
+            set: function(stream) {
+              setupVideo(this);
+              var res = origSet.call(this, stream);
+              var self = this;
+              if (stream) {
+                setTimeout(function() {
+                  setupVideo(self);
+                  try {
+                    var p = self.play();
+                    if (p && p.catch) p.catch(function() {});
+                  } catch (_) {}
+                }, 50);
+              }
+              return res;
+            },
+            configurable: true,
+            enumerable: true
+          });
+        }
+      } catch (_) {}
+
+      // 4. Polling loop to scan both standard DOM and all ShadowRoots (Flutter flt-glass-pane)
+      function fixAllVideosInSubtree(root) {
+        if (!root) return;
+        try {
+          if (root.querySelectorAll) {
+            var vids = root.querySelectorAll('video');
+            for (var i = 0; i < vids.length; i++) {
+              setupVideo(vids[i]);
+              if (vids[i].paused && vids[i].srcObject) {
+                try { vids[i].play(); } catch (_) {}
+              }
+            }
+            var allNodes = root.querySelectorAll('*');
+            for (var j = 0; j < allNodes.length; j++) {
+              if (allNodes[j].shadowRoot) {
+                fixAllVideosInSubtree(allNodes[j].shadowRoot);
               }
             }
           }
-        });
-        if (document.documentElement) {
-          observer.observe(document.documentElement, { childList: true, subtree: true });
-        }
+        } catch (_) {}
       }
+
+      setInterval(function() {
+        fixAllVideosInSubtree(document);
+      }, 500);
     })();
   </script>
 </head>
