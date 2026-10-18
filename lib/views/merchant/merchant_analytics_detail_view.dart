@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/mock_database_service.dart';
@@ -17,7 +16,6 @@ class MerchantAnalyticsDetailView extends StatefulWidget {
 
 class _MerchantAnalyticsDetailViewState extends State<MerchantAnalyticsDetailView> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final NumberFormat _currencyFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'IDR ', decimalDigits: 0);
 
   @override
   void initState() {
@@ -129,8 +127,6 @@ class _MerchantAnalyticsDetailViewState extends State<MerchantAnalyticsDetailVie
     required int activeMembers,
   }) {
     final avgVisitsPerMember = members.isNotEmpty ? (totalVisits / members.length).toStringAsFixed(1) : '0.0';
-    // Estimated average gross revenue driven: IDR 45,000 per stamp visit
-    final estimatedDrivenRevenue = totalVisits * 45000;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
@@ -192,7 +188,7 @@ class _MerchantAnalyticsDetailViewState extends State<MerchantAnalyticsDetailVie
                     color: AppColors.primary.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.monetization_on_rounded, color: AppColors.accentAmber, size: 24),
+                  child: const Icon(Icons.stars_rounded, color: AppColors.accentAmber, size: 24),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -200,17 +196,17 @@ class _MerchantAnalyticsDetailViewState extends State<MerchantAnalyticsDetailVie
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'ESTIMATED LOYALTY REVENUE GENERATED',
+                        'VERIFIED STAMP VISITS & CARDS COMPLETED',
                         style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primaryLight, letterSpacing: 0.7),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        _currencyFormat.format(estimatedDrivenRevenue),
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white),
+                        '$totalVisits Stamps Awarded • $completedCards Completed Cards',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
                       ),
                       const SizedBox(height: 2),
                       const Text(
-                        'Direct gross store sales stimulated exclusively by stamp card visits.',
+                        'Direct customer in-store visits and card milestones tracked purely from verified stamp scans.',
                         style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                       ),
                     ],
@@ -248,7 +244,6 @@ class _MerchantAnalyticsDetailViewState extends State<MerchantAnalyticsDetailVie
               final progVisits = progMembers.fold<int>(0, (sum, m) => sum + m.stampsCollected);
               final progCompleted = progMembers.where((m) => m.status == 'completed').length;
               final trafficShare = totalVisits > 0 ? ((progVisits / totalVisits) * 100).round() : 0;
-              final drivenEst = progVisits * 45000;
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 14),
@@ -330,9 +325,9 @@ class _MerchantAnalyticsDetailViewState extends State<MerchantAnalyticsDetailVie
                           icon: Icons.check_circle_outline_rounded,
                         ),
                         _ProgramMetricItem(
-                          label: 'Gross Stimulated',
-                          value: _currencyFormat.format(drivenEst),
-                          icon: Icons.payments_outlined,
+                          label: 'Completion Rate',
+                          value: '${progMembers.isNotEmpty ? ((progCompleted / progMembers.length) * 100).round() : 0}%',
+                          icon: Icons.stars_rounded,
                         ),
                       ],
                     ),
@@ -428,7 +423,7 @@ class _MerchantAnalyticsDetailViewState extends State<MerchantAnalyticsDetailVie
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Retention measures customer returning cadence within safe visit thresholds. Members with consistent stamps protect recurring sales and eliminate competitor churn.',
+                  'Retention measures customer returning cadence within safe visit thresholds. Members with consistent stamps maintain regular store habits and eliminate competitor churn.',
                   style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
                 ),
                 const SizedBox(height: 16),
@@ -666,9 +661,9 @@ class _MerchantAnalyticsDetailViewState extends State<MerchantAnalyticsDetailVie
           ),
           _buildJourneyStep(
             stepNumber: '2',
-            title: 'Personalized Offer Calibration (Zero Margin Waste)',
+            title: 'Personalized Offer Calibration (High-Converting Target)',
             description:
-                'Instead of generic mass discounts, AI generates an offer tailored to their card progress or favorite menu category (e.g. 35% comeback treat or double stamp booster).',
+                'Instead of generic mass discounts, AI generates an offer tailored to their card progress or favorite menu category (e.g. comeback treat or bonus stamp booster).',
             icon: Icons.tune_rounded,
             iconColor: AppColors.primaryLight,
           ),
