@@ -568,7 +568,7 @@ class _CustomerHomeViewState extends State<CustomerHomeView> {
   }
 }
 
-class _StackedCardsContainer extends StatelessWidget {
+class _StackedCardsContainer extends StatefulWidget {
   final List<MemberRecord> memberRecords;
   final List<LoyaltyProgram> programs;
   final void Function(MemberRecord member, LoyaltyProgram program) onCardTap;
@@ -580,39 +580,259 @@ class _StackedCardsContainer extends StatelessWidget {
   });
 
   @override
+  State<_StackedCardsContainer> createState() => _StackedCardsContainerState();
+}
+
+class _StackedCardsContainerState extends State<_StackedCardsContainer>
+    with SingleTickerProviderStateMixin {
+  late List<MemberRecord> _cards;
+
+  late AnimationController _swipeController;
+  late Animation<Offset> _swipeAnimation;
+
+  double _dragOffset = 0.0;
+  bool _isShuffling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cards = List.from(widget.memberRecords);
+
+    _swipeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+    _swipeAnimation = Tween<Offset>(
+      begin: Offset.zero,
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _swipeController, curve: Curves.easeOut));
+
+    _swipeController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        if (_isShuffling && mounted) {
+          setState(() {
+            final topCard = _cards.removeAt(0);
+            _cards.add(topCard);
+            _dragOffset = 0.0;
+            _isShuffling = false;
+          });
+          _swipeController.reset();
+        }
+      }
+    });
+  }
+
+  bool _cardsOrderOrStampsChanged(
+      List<MemberRecord> oldList, List<MemberRecord> newList) {
+    if (oldList.length != newList.length) return true;
+    for (int i = 0; i < oldList.length; i++) {
+      if (oldList[i].id != newList[i].id ||
+          oldList[i].stampsCollected != newList[i].stampsCollected ||
+          oldList[i].status != newList[i].status) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @override
+  void didUpdateWidget(covariant _StackedCardsContainer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_cardsOrderOrStampsChanged(oldWidget.memberRecords, widget.memberRecords)) {
+      setState(() {
+        _cards = List.from(widget.memberRecords);
+        _dragOffset = 0.0;
+      });
+      _swipeController.reset();
+    } else {
+      // Sync any updated card metadata in-place without resetting swipe position
+      final updatedMap = {for (final c in widget.memberRecords) c.id: c};
+      setState(() {
+        _cards = _cards.map((c) => updatedMap[c.id] ?? c).toList();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _swipeController.dispose();
+    super.dispose();
+  }
+
+  void _onPanUpdate(DragUpdateDetails details) {
+    setState(() {
+      _dragOffset += details.delta.dx;
+    });
+  }
+
+  void _onPanEnd(DragEndDetails details) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    // If dragged more than 40% of the screen width, trigger shuffle
+    if (_cards.length > 1 && _dragOffset.abs() > screenWidth * 0.4) {
+      _isShuffling = true;
+      final direction = _dragOffset > 0 ? 1.0 : -1.0;
+      _swipeAnimation =
+          Tween<Offset>(
+            begin: Offset(_dragOffset, 0),
+            end: Offset(screenWidth * direction, 0),
+          ).animate(
+            CurvedAnimation(parent: _swipeController, curve: Curves.easeOut),
+          );
+      _swipeController.forward(from: 0);
+    } else {
+      _isShuffling = false;
+      // Snap back
+      _swipeAnimation =
+          Tween<Offset>(
+            begin: Offset(_dragOffset, 0),
+            end: Offset.zero,
+          ).animate(
+            CurvedAnimation(
+              parent: _swipeController,
+              curve: Curves.easeOutBack,
+            ),
+          );
+      _swipeController.forward(from: 0).then((_) {
+        if (mounted) {
+          setState(() {
+            _dragOffset = 0.0;
+          });
+        }
+      });
+    }
+  }
+
+  LoyaltyProgram _getProgramForCard(MemberRecord card) {
+    return widget.programs.firstWhere(
+      (p) => p.id == card.programId,
+      orElse: () => LoyaltyProgram(
+        id: card.programId,
+        merchantId: card.merchantId,
+        merchantName: 'Partner Merchant',
+        title: card.programTitle,
+        description: 'Digital Loyalty Program',
+        category: 'Cafe',
+        totalStamps: card.totalStampsRequired,
+        rewardTitle: 'Reward Voucher',
+        rewardDescription: 'Exclusive perk',
+        gradientColors: ['#6366F1', '#A855F7'],
+        iconName: 'coffee',
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_cards.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Column(
-      children: List.generate(memberRecords.length, (index) {
-        final member = memberRecords[index];
-        final prog = programs.firstWhere(
-          (p) => p.id == member.programId,
-          orElse: () => LoyaltyProgram(
-            id: member.programId,
-            merchantId: member.merchantId,
-            merchantName: 'Partner Merchant',
-            title: member.programTitle,
-            description: 'Digital Loyalty Program',
-            category: 'Cafe',
-            totalStamps: member.totalStampsRequired,
-            rewardTitle: 'Reward Voucher',
-            rewardDescription: 'Exclusive perk',
-            gradientColors: ['#6366F1', '#A855F7'],
-            iconName: 'coffee',
-          ),
-        );
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 310, // Reduced height to fix large gap below cards
+          child: Stack(
+            alignment: Alignment.topCenter,
+            clipBehavior: Clip.none,
+            children: List.generate(_cards.length, (index) {
+              // Render from back to front
+              final reverseIndex = _cards.length - 1 - index;
+              final card = _cards[reverseIndex];
+              final prog = _getProgramForCard(card);
 
-        final isFrontCard = index == 0;
+              // Only show top 3 cards to prevent rendering issues and overlap
+              if (reverseIndex > 2 && reverseIndex != _cards.length - 1) {
+                return const SizedBox.shrink();
+              }
 
-        return Padding(
-          padding: EdgeInsets.only(bottom: index == memberRecords.length - 1 ? 0 : 14),
-          child: _StackedLoyaltyCardItem(
-            member: member,
-            program: prog,
-            isFront: isFrontCard,
-            onTap: () => onCardTap(member, prog),
+              final isTopCard = reverseIndex == 0;
+
+              // Calculate scale and offset based on reverseIndex
+              final scale = 1.0 - (reverseIndex * 0.05);
+
+              // To make background cards stick out from the TOP,
+              // the front card (reverseIndex 0) should be pushed down the most.
+              // If we show 3 cards, reverseIndex goes 0, 1, 2.
+              final displayIndex = reverseIndex > 2 ? 2 : reverseIndex;
+              final verticalOffset = (2 - displayIndex) * 16.0;
+
+              // Wrap card widget to ignore taps on background cards
+              Widget cardWidget = IgnorePointer(
+                ignoring: !isTopCard,
+                child: _StackedLoyaltyCardItem(
+                  member: card,
+                  program: prog,
+                  isFront: isTopCard,
+                  onTap: () => widget.onCardTap(card, prog),
+                ),
+              );
+
+              if (isTopCard) {
+                return AnimatedBuilder(
+                  animation: _swipeController,
+                  builder: (context, child) {
+                    final currentOffset = _swipeController.isAnimating
+                        ? _swipeAnimation.value.dx
+                        : _dragOffset;
+
+                    final rotation = currentOffset / 800; // Slight rotation
+
+                    return Positioned(
+                      top: verticalOffset,
+                      left: 0,
+                      right: 0,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onHorizontalDragUpdate: _onPanUpdate,
+                        onHorizontalDragEnd: _onPanEnd,
+                        onTap: () => widget.onCardTap(card, prog),
+                        child: Transform.translate(
+                          offset: Offset(currentOffset, 0),
+                          child: Transform.rotate(angle: rotation, child: child),
+                        ),
+                      ),
+                    );
+                  },
+                  child: cardWidget,
+                );
+              } else {
+                // Background cards
+                return Positioned(
+                  top: verticalOffset,
+                  left: 0,
+                  right: 0,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOut,
+                    transform: Matrix4.diagonal3Values(scale, scale, 1.0),
+                    transformAlignment: Alignment.topCenter,
+                    child: cardWidget,
+                  ),
+                );
+              }
+            }),
           ),
-        );
-      }),
+        ),
+        if (_cards.length > 1) ...[
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.swipe_rounded, size: 14, color: AppColors.primaryLight),
+              const SizedBox(width: 6),
+              Text(
+                'Swipe card horizontally to shuffle (${_cards.length} cards)',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
     );
   }
 }
