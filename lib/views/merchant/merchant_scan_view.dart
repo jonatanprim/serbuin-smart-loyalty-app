@@ -24,7 +24,6 @@ class _MerchantScanViewState extends State<MerchantScanView> with WidgetsBinding
   String? _lastScannedCode;
   DateTime? _lastScannedTime;
   bool _isCameraPermissionDenied = false;
-  bool _isStartingCamera = false;
 
   @override
   void initState() {
@@ -34,7 +33,7 @@ class _MerchantScanViewState extends State<MerchantScanView> with WidgetsBinding
       'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js',
     );
     _scannerController = MobileScannerController(
-      autoStart: false,
+      autoStart: true,
       facing: CameraFacing.back,
       detectionSpeed: DetectionSpeed.normal,
       formats: const [BarcodeFormat.qrCode],
@@ -54,8 +53,6 @@ class _MerchantScanViewState extends State<MerchantScanView> with WidgetsBinding
     if (merchantProgs.isNotEmpty) {
       _selectedProgramId = merchantProgs.first.id;
     }
-
-    _startScanner();
   }
 
   @override
@@ -74,45 +71,7 @@ class _MerchantScanViewState extends State<MerchantScanView> with WidgetsBinding
       // Re-check and resume camera if returning from iOS permission modal dialog
       final v = _scannerController.value;
       if (!v.isRunning && !v.isStarting) {
-        _startScanner();
-      }
-    }
-  }
-
-  Future<void> _startScanner() async {
-    if (!mounted || _isStartingCamera) return;
-    _isStartingCamera = true;
-
-    try {
-      if (!kIsWeb) {
-        final status = await Permission.camera.request();
-        if (!status.isGranted) {
-          if (mounted) {
-            setState(() {
-              _isCameraPermissionDenied = true;
-              _isStartingCamera = false;
-            });
-          }
-          return;
-        }
-      }
-
-      if (_scannerController.value.isRunning) {
-        _isStartingCamera = false;
-        return;
-      }
-
-      await _scannerController.start();
-      if (mounted) {
-        setState(() {
-          _isCameraPermissionDenied = false;
-          _isStartingCamera = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error starting scanner: $e');
-      if (mounted) {
-        setState(() => _isStartingCamera = false);
+        _restartScanner();
       }
     }
   }
@@ -133,7 +92,9 @@ class _MerchantScanViewState extends State<MerchantScanView> with WidgetsBinding
           return;
         }
       }
-      await _scannerController.start();
+      if (!_scannerController.value.isRunning && !_scannerController.value.isStarting) {
+        await _scannerController.start();
+      }
       if (mounted) {
         setState(() => _isCameraPermissionDenied = false);
       }
@@ -1233,157 +1194,163 @@ class _MerchantScanViewState extends State<MerchantScanView> with WidgetsBinding
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Fullscreen Camera Scanner Feed
-          MobileScanner(
-            controller: _scannerController,
-            fit: BoxFit.cover,
-            onDetect: (capture) {
-              if (_isProcessing) return;
-              final List<Barcode> barcodes = capture.barcodes;
-              if (barcodes.isNotEmpty) {
-                final String? code = barcodes.first.rawValue;
-                if (code != null && code.isNotEmpty) {
-                  if (_lastScannedCode == code &&
-                      _lastScannedTime != null &&
-                      DateTime.now().difference(_lastScannedTime!).inSeconds < 2) {
-                    return;
+          // 1. Fullscreen Camera Scanner Feed with explicit layout bounds
+          Positioned.fill(
+            child: SizedBox(
+              width: MediaQuery.of(context).size.width,
+              height: MediaQuery.of(context).size.height,
+              child: MobileScanner(
+                controller: _scannerController,
+                fit: BoxFit.cover,
+                onDetect: (capture) {
+                  if (_isProcessing) return;
+                  final List<Barcode> barcodes = capture.barcodes;
+                  if (barcodes.isNotEmpty) {
+                    final String? code = barcodes.first.rawValue;
+                    if (code != null && code.isNotEmpty) {
+                      if (_lastScannedCode == code &&
+                          _lastScannedTime != null &&
+                          DateTime.now().difference(_lastScannedTime!).inSeconds < 2) {
+                        return;
+                      }
+                      _lastScannedCode = code;
+                      _lastScannedTime = DateTime.now();
+                      _handleScanOrInput(code);
+                    }
                   }
-                  _lastScannedCode = code;
-                  _lastScannedTime = DateTime.now();
-                  _handleScanOrInput(code);
-                }
-              }
-            },
-            placeholderBuilder: (context) => ColoredBox(
-              color: Colors.black,
-              child: Center(
-                child: SizedBox(
-                  width: 260,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceLight.withValues(alpha: 0.85),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.primaryLight.withValues(alpha: 0.4),
-                            width: 1.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.25),
-                              blurRadius: 16,
-                              spreadRadius: 2,
+                },
+                placeholderBuilder: (context) => ColoredBox(
+                  color: Colors.black,
+                  child: Center(
+                    child: SizedBox(
+                      width: 260,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceLight.withValues(alpha: 0.85),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppColors.primaryLight.withValues(alpha: 0.4),
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primary.withValues(alpha: 0.25),
+                                  blurRadius: 16,
+                                  spreadRadius: 2,
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        child: const Center(
-                          child: SizedBox(
-                            width: 26,
-                            height: 26,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: AppColors.primaryLight,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Starting Camera...',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          'Allow camera access if prompted by iOS or browser',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 11,
-                            height: 1.3,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextButton.icon(
-                        onPressed: _restartScanner,
-                        icon: const Icon(Icons.refresh_rounded, size: 16, color: AppColors.primaryLight),
-                        label: const Text(
-                          'Tap to restart camera',
-                          style: TextStyle(
-                            color: AppColors.primaryLight,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            errorBuilder: (context, error) {
-              final isDenied = error.errorCode == MobileScannerErrorCode.permissionDenied || _isCameraPermissionDenied;
-              return ColoredBox(
-                color: Colors.black,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.videocam_off_rounded, color: AppColors.accentRose, size: 44),
-                        const SizedBox(height: 12),
-                        Text(
-                          isDenied ? 'Camera permission required' : 'Camera unavailable',
-                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          isDenied
-                              ? 'Please enable camera access for Serbuin in iOS Settings or browser settings, then tap Retry.'
-                              : (error.errorDetails?.message ?? error.errorCode.name),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.white60, fontSize: 12),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            ElevatedButton.icon(
-                              onPressed: _restartScanner,
-                              icon: const Icon(Icons.refresh_rounded, size: 18),
-                              label: const Text('Retry Camera'),
-                              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-                            ),
-                            const SizedBox(width: 12),
-                            OutlinedButton.icon(
-                              onPressed: _showInputManualSheet,
-                              icon: const Icon(Icons.dialpad_rounded, size: 18),
-                              label: const Text('Manual Input'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                side: const BorderSide(color: Colors.white38),
+                            child: const Center(
+                              child: SizedBox(
+                                width: 26,
+                                height: 26,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: AppColors.primaryLight,
+                                ),
                               ),
                             ),
-                          ],
-                        ),
-                      ],
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Starting Camera...',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            child: Text(
+                              'Allow camera access if prompted by iOS or browser',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
+                                height: 1.3,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextButton.icon(
+                            onPressed: _restartScanner,
+                            icon: const Icon(Icons.refresh_rounded, size: 16, color: AppColors.primaryLight),
+                            label: const Text(
+                              'Tap to restart camera',
+                              style: TextStyle(
+                                color: AppColors.primaryLight,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              );
-            },
+                errorBuilder: (context, error) {
+                  final isDenied = error.errorCode == MobileScannerErrorCode.permissionDenied || _isCameraPermissionDenied;
+                  return ColoredBox(
+                    color: Colors.black,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.videocam_off_rounded, color: AppColors.accentRose, size: 44),
+                            const SizedBox(height: 12),
+                            Text(
+                              isDenied ? 'Camera permission required' : 'Camera unavailable',
+                              style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              isDenied
+                                  ? 'Please enable camera access for Serbuin in iOS Settings or browser settings, then tap Retry.'
+                                  : (error.errorDetails?.message ?? error.errorCode.name),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white60, fontSize: 12),
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                ElevatedButton.icon(
+                                  onPressed: _restartScanner,
+                                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                                  label: const Text('Retry Camera'),
+                                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                                ),
+                                const SizedBox(width: 12),
+                                OutlinedButton.icon(
+                                  onPressed: _showInputManualSheet,
+                                  icon: const Icon(Icons.dialpad_rounded, size: 18),
+                                  label: const Text('Manual Input'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    side: const BorderSide(color: Colors.white38),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
 
           // 2. Translucent Vignette Mask & Scanning Frame Overlay
@@ -1410,11 +1377,16 @@ class _MerchantScanViewState extends State<MerchantScanView> with WidgetsBinding
                           onPressed: () => Navigator.pop(context),
                         ),
                       ),
+                      const SizedBox(width: 8),
 
-                      const Text(
-                        'Scan Customer QR',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
+                      const Expanded(
+                        child: Text(
+                          'Scan Customer QR',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
+                        ),
                       ),
+                      const SizedBox(width: 8),
 
                       // Camera reload & Torch toggle buttons
                       Row(
@@ -1467,7 +1439,10 @@ class _MerchantScanViewState extends State<MerchantScanView> with WidgetsBinding
                           items: merchantProgs.map((p) {
                             return DropdownMenuItem(
                               value: p.id,
-                              child: Text('Awarding to: ${p.title} (${p.totalStamps} stamps)'),
+                              child: Text(
+                                'Awarding to: ${p.title} (${p.totalStamps} stamps)',
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             );
                           }).toList(),
                           onChanged: (val) {
